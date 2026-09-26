@@ -34,8 +34,8 @@ const animated = MOTION_STYLE_OPTIONS.map((option) => option.value).filter(
 );
 
 describe("motion styles", () => {
-  it("offers sixteen animated styles beside Still", () => {
-    expect(animated).toHaveLength(16);
+  it("offers twenty-one animated styles beside Still", () => {
+    expect(animated).toHaveLength(21);
   });
 
   it("holds every cell still for the Still style and at zero amount", () => {
@@ -51,6 +51,7 @@ describe("motion styles", () => {
         markShift: 0,
         rotation: 0,
         scale: 1,
+        squash: 1,
       });
     }
   });
@@ -66,6 +67,7 @@ describe("motion styles", () => {
           expect(last.scale).toBeCloseTo(first.scale, 9);
           expect(last.dx).toBeCloseTo(first.dx, 9);
           expect(last.dy).toBeCloseTo(first.dy, 9);
+          expect(last.squash).toBeCloseTo(first.squash, 9);
           // Rotation may land a whole turn later, which draws identically.
           const turn = Math.PI * 2;
           const rotationDelta = (last.rotation - first.rotation) / turn;
@@ -89,6 +91,7 @@ describe("motion styles", () => {
             Math.abs(a.dx - b.dx) > 1e-6 ||
             Math.abs(a.dy - b.dy) > 1e-6 ||
             Math.abs(a.rotation - b.rotation) > 1e-6 ||
+            Math.abs(a.squash - b.squash) > 1e-6 ||
             a.glyphShift !== b.glyphShift ||
             a.markShift !== b.markShift
           ) {

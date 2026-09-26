@@ -1,5 +1,4 @@
 import {
-  canvasEditingModule,
   defineToolcraft,
   imageExportModule,
   mediaSourceModule,
@@ -11,10 +10,12 @@ import appDefaults from "./app-defaults.json" with { type: "json" };
 import { appIdentity } from "./app-identity";
 import { LOOP_SECONDS } from "./engine/engine-constants";
 import {
-  brushSection,
-  guidesSection,
-  patternSection,
-} from "./schema/schema-sections-editing";
+  burstSection,
+  captionSection,
+  swirlSection,
+} from "./schema/schema-sections-effects";
+import { fieldSection } from "./schema/schema-sections-field";
+import { guidesSection } from "./schema/schema-sections-guides";
 import {
   backgroundSection,
   gridSection,
@@ -43,26 +44,23 @@ export const appSchema = defineToolcraft({
       upload: true,
     },
     identity: appIdentity,
-    // The painted layer is product-owned state rather than a control value, so
-    // it opts into persistence and settings transfer explicitly.
-    persistence: {
-      additionalValueTargets: ["edit.cells"],
-      storage: "localStorage",
-    },
-    settingsTransfer: { additionalValueTargets: ["edit.cells"], enabled: "auto" },
+    persistence: { storage: "localStorage" },
+    settingsTransfer: { enabled: "auto" },
     panels: {
       controls: {
         sections: [
           backgroundSection,
           sourceSection,
-          brushSection,
           guidesSection,
-          patternSection,
           gridSection,
           unitSection,
+          fieldSection,
           toneSection,
           toneResponseSection,
           paletteSection,
+          burstSection,
+          swirlSection,
+          captionSection,
           cameraSection,
           glitchSection,
           motionSection,
@@ -78,7 +76,6 @@ export const appSchema = defineToolcraft({
     },
   },
   modules: [
-    canvasEditingModule(),
     mediaSourceModule(),
     timelineModule({ defaultDurationSeconds: LOOP_SECONDS, mode: "keyframes" }),
     imageExportModule(),

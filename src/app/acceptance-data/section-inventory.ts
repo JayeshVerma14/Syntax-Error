@@ -47,30 +47,6 @@ export const appControlSectionInventory = [
     title: "Source",
   },
   {
-    entity: "Brush",
-    entityId: "tool",
-    finiteSelectors: [
-      {
-        affectedTargets: [],
-        reason:
-          "Brush mode decides whether the drawing ink is usable; the ink is an explicit applicability dependent.",
-        role: "branch",
-        target: "tool.brush",
-      },
-      {
-        reason:
-          "Brush size changes its own painted footprint without changing which other controls apply.",
-        role: "parameter",
-        target: "tool.size",
-      },
-    ],
-    groupingReason:
-      "One entity: the brush that paints cells, its ink and its footprint. These reset together as one tool setup.",
-    id: "tool",
-    targets: ["tool.brush", "tool.color", "tool.size"],
-    title: "Brush",
-  },
-  {
     entity: "Guides",
     entityId: "guides",
     finiteSelectors: [
@@ -92,35 +68,6 @@ export const appControlSectionInventory = [
     id: "guides",
     targets: ["view.grid", "view.circleOverlay"],
     title: "Guides",
-  },
-  {
-    entity: "Patterns",
-    entityId: "pattern",
-    finiteSelectors: [
-      {
-        reason:
-          "Pattern kind selects which arrangement a fill stamps without changing which other controls apply.",
-        role: "parameter",
-        target: "pattern.kind",
-      },
-      {
-        reason:
-          "Pattern scale changes its own stamped period without changing which other controls apply.",
-        role: "parameter",
-        target: "pattern.scale",
-      },
-    ],
-    groupingReason:
-      "One entity: the repeating arrangement stamped into the painted layer, plus the commands that write and clear it.",
-    id: "pattern",
-    targets: [
-      "pattern.angle",
-      "pattern.clear",
-      "pattern.fill",
-      "pattern.kind",
-      "pattern.scale",
-    ],
-    title: "Patterns",
   },
   {
     entity: "Grid",
@@ -151,7 +98,7 @@ export const appControlSectionInventory = [
       {
         affectedTargets: [],
         reason:
-          "Shape decides whether the mark mix, its spread, the glyph set and the tone ramp are usable; all four are explicit applicability dependents.",
+          "Shape decides whether the mark mix, its spread and every character setting are usable; each is an explicit applicability dependent.",
         role: "branch",
         target: engineTargets.shape,
       },
@@ -167,21 +114,74 @@ export const appControlSectionInventory = [
         role: "parameter",
         target: engineTargets.ramp,
       },
+      {
+        reason:
+          "Sizing changes how glyph size follows tone without changing which other unit controls apply.",
+        role: "parameter",
+        target: engineTargets.glyphSizing,
+      },
+      {
+        reason:
+          "Face swaps the glyph typeface without changing which other unit controls apply.",
+        role: "parameter",
+        target: engineTargets.glyphFace,
+      },
+      {
+        reason:
+          "Bold swaps the glyph weight without changing which other unit controls apply.",
+        role: "parameter",
+        target: engineTargets.glyphBold,
+      },
     ],
     groupingReason:
-      "One entity: the mark drawn in every cell, including its shape vocabulary and how ink drives its size.",
+      "One entity: the mark drawn in every cell, its shape vocabulary, how glyph marks are set as type, how ink drives its size, and whether the brightest cells are knocked out. The look command applies a whole unit setup at once.",
     id: "unit",
     targets: [
       engineTargets.unitAngle,
       engineTargets.unitFloor,
-      engineTargets.glyphs,
+      engineTargets.knockout,
       engineTargets.mix,
       engineTargets.mixDistribution,
-      engineTargets.ramp,
       engineTargets.scale,
       engineTargets.shape,
+      "glyph.terminal",
+      engineTargets.glyphs,
+      engineTargets.ramp,
+      engineTargets.glyphPhrase,
+      engineTargets.glyphSizing,
+      engineTargets.glyphFace,
+      engineTargets.glyphBold,
     ],
     title: "Unit",
+  },
+  {
+    entity: "Field",
+    entityId: "field",
+    finiteSelectors: [
+      {
+        affectedTargets: [],
+        reason:
+          "The idle field switch decides whether the field settings are usable; all three are explicit applicability dependents.",
+        role: "branch",
+        target: engineTargets.backdropOn,
+      },
+      {
+        reason:
+          "Clearance changes its own margin around the subject without changing which other controls apply.",
+        role: "parameter",
+        target: engineTargets.backdropClearance,
+      },
+    ],
+    groupingReason:
+      "One entity: the quiet field in the empty cells, its density, its margin from the subject and its strength. These reset together.",
+    id: "field",
+    targets: [
+      engineTargets.backdropOn,
+      engineTargets.backdropDensity,
+      engineTargets.backdropClearance,
+      engineTargets.backdropOpacity,
+    ],
+    title: "Field",
   },
   {
     entity: "Tone",
@@ -236,7 +236,7 @@ export const appControlSectionInventory = [
       {
         affectedTargets: [],
         reason:
-          "Colour mode decides whether the ink list, its shuffle and its remap command are usable; all three are explicit applicability dependents.",
+          "Colour mode decides whether the ink list, its shuffle and colour matching are usable; each is an explicit applicability dependent.",
         role: "branch",
         target: engineTargets.paletteMode,
       },
@@ -276,10 +276,116 @@ export const appControlSectionInventory = [
       engineTargets.colorDiffuse,
       engineTargets.greyscale,
       engineTargets.ignoreColor,
-      "palette.remap",
       "palette.shuffle",
     ],
     title: "Palette",
+  },
+  {
+    entity: "Burst",
+    entityId: "burst",
+    finiteSelectors: [
+      {
+        affectedTargets: [],
+        reason:
+          "The burst switch decides whether the burst settings are usable; all five are explicit applicability dependents.",
+        role: "branch",
+        target: engineTargets.burstOn,
+      },
+      {
+        reason: "Ray count changes its own lines without changing which other controls apply.",
+        role: "parameter",
+        target: engineTargets.burstRays,
+      },
+      {
+        reason: "Burst count changes its own timing without changing which other controls apply.",
+        role: "parameter",
+        target: engineTargets.burstCount,
+      },
+    ],
+    groupingReason:
+      "One entity: the burst of character rays, its on/off switch and the settings that shape it. These reset together.",
+    id: "burst",
+    targets: [
+      engineTargets.burstOn,
+      engineTargets.burstOrigin,
+      engineTargets.burstRays,
+      engineTargets.burstReach,
+      engineTargets.burstThickness,
+      engineTargets.burstCount,
+    ],
+    title: "Burst",
+  },
+  {
+    entity: "Swirl",
+    entityId: "swirl",
+    finiteSelectors: [
+      {
+        affectedTargets: [],
+        reason:
+          "The swirl switch decides whether the swirl settings are usable; all five are explicit applicability dependents.",
+        role: "branch",
+        target: engineTargets.swirlOn,
+      },
+      {
+        reason: "Turns changes its own orbit speed without changing which other controls apply.",
+        role: "parameter",
+        target: engineTargets.swirlTurns,
+      },
+    ],
+    groupingReason:
+      "One entity: the orbiting streams of characters, their switch, centre, size and speed. These reset together.",
+    id: "swirl",
+    targets: [
+      engineTargets.swirlOn,
+      engineTargets.swirlCenter,
+      engineTargets.swirlCount,
+      engineTargets.swirlRadius,
+      engineTargets.swirlBand,
+      engineTargets.swirlTurns,
+    ],
+    title: "Swirl",
+  },
+  {
+    entity: "Caption",
+    entityId: "caption",
+    finiteSelectors: [
+      {
+        affectedTargets: [],
+        reason:
+          "The caption switch decides whether the caption settings are usable; all six are explicit applicability dependents.",
+        role: "branch",
+        target: engineTargets.captionOn,
+      },
+      {
+        reason: "Reveal changes how the caption appears without changing which other controls apply.",
+        role: "parameter",
+        target: engineTargets.captionReveal,
+      },
+      {
+        reason: "Blink changes its own flashing without changing which other controls apply.",
+        role: "parameter",
+        target: engineTargets.captionBlink,
+      },
+      {
+        reason: "The cursor draws its own character without changing which other controls apply.",
+        role: "parameter",
+        target: engineTargets.captionCursor,
+      },
+    ],
+    groupingReason:
+      "One entity: the terminal text set over the sheet, its typography, placement, reveal and highlight. These reset together.",
+    id: "caption",
+    targets: [
+      engineTargets.captionOn,
+      engineTargets.captionText,
+      engineTargets.captionReveal,
+      engineTargets.captionType,
+      engineTargets.captionPosition,
+      engineTargets.captionHighlight,
+      engineTargets.captionBlink,
+      engineTargets.captionCursor,
+    ],
+    title: "Caption",
   },
   {
     entity: "Camera",

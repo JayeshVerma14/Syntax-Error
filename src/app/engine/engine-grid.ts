@@ -5,6 +5,7 @@
  * density is box-averaged out of it by `gridFromRaster`.
  */
 
+import { waitForFont } from "./engine-fonts";
 import { peekFootage, seekFootage } from "./engine-footage";
 import type { EngineSettings } from "./engine-settings";
 import {
@@ -14,7 +15,6 @@ import {
   rasterizeFootage,
   rasterizeWordmark,
   type SourceRaster,
-  waitForWordmarkFont,
 } from "./engine-source";
 
 /** How long an export waits for a freshly chosen typeface before rasterizing. */
@@ -76,7 +76,7 @@ export async function resolveSourceRaster(
 ): Promise<SourceRaster | null> {
   const { settings } = request;
   if (settings.sourceKind === "text") {
-    await waitForWordmarkFont(settings.type, EXPORT_FONT_WAIT_MS);
+    await waitForFont(settings.type, EXPORT_FONT_WAIT_MS);
     return rasterizeWordmark(
       settings.text,
       settings.type,

@@ -11,6 +11,7 @@ import {
   type ToolcraftSceneRect,
 } from "@/toolcraft/runtime";
 
+import { waitForFont } from "./engine-fonts";
 import { findSourceAsset, resolveSourceRaster } from "./engine-grid";
 import { renderSyntaxErrorFrame, resolveGridShape } from "./engine-render";
 import {
@@ -19,6 +20,9 @@ import {
   type EngineSettings,
 } from "./engine-settings";
 import { gridFromRaster } from "./engine-source";
+
+/** How long an export waits for a freshly chosen caption typeface. */
+const EXPORT_FONT_WAIT_MS = 3000;
 
 type StateLike = Readonly<{
   canvas: Readonly<{ size: { height: number; width: number } }>;
@@ -68,8 +72,11 @@ export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
     signal.throwIfAborted();
     const shape = resolveGridShape(settings, frame.width, frame.height);
     const grid = raster ? gridFromRaster(raster, shape.cols, shape.rows) : null;
-    // A sheet with only painted cells is still a valid composition.
-    if (!grid && Object.keys(settings.edit).length === 0) return;
+    // Backdrop, burst, swirl and caption still draw without a sampled source.
+    if (settings.caption.enabled && settings.caption.text.trim().length > 0) {
+      await waitForFont(settings.caption.type, EXPORT_FONT_WAIT_MS);
+      signal.throwIfAborted();
+    }
 
     renderSyntaxErrorFrame({
       context,

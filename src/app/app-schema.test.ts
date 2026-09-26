@@ -46,14 +46,16 @@ describe("appSchema", () => {
   it("orders the product sections from source material to motion", () => {
     expect(productSectionIds()).toEqual([
       "source",
-      "tool",
       "guides",
-      "pattern",
       "grid",
       "unit",
+      "field",
       "tone",
       "tone.response",
       "palette",
+      "burst",
+      "swirl",
+      "caption",
       "camera",
       "glitch",
       "motion",

@@ -221,24 +221,6 @@ export const paletteSection: ToolcraftControlSectionSchema = {
       target: "output.flatInk",
       type: "switch",
     },
-    remap: {
-      actions: [
-        {
-          icon: "wand-sparkles",
-          label: "Remap painted art",
-          value: "palette.remap",
-        },
-      ],
-      applicability: whenInkPalette,
-      description:
-        "Snaps every painted cell to its closest ink, so artwork made under one palette moves onto another.",
-      label: "Existing artwork",
-      performanceReason:
-        "Remapping rewrites the painted record once per command.",
-      performanceRole: "responsiveness",
-      target: "palette.remap",
-      type: "actions",
-    },
   },
   id: "palette",
   title: "Palette",

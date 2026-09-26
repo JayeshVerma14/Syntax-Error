@@ -1,0 +1,488 @@
+From b5e49613098e5e45c5b6cb83dff338cf2d56e9a7 Mon Sep 17 00:00:00 2001
+From: Amitabh Pandey <amitabh@elimentary.com>
+Date: Fri, 25 Sep 2026 04:33:33 +0000
+Subject: [PATCH] Play footage in real time instead of seeking per frame
+
+The preview seeked the hidden video element to the playhead on every
+timeline tick and awaited `seeked` before redrawing, so each animation
+frame cost a keyframe-to-target decode and uploaded videos stuttered.
+
+- While the timeline plays, the element now plays on its own (looping,
+  re-synced only on >250ms drift) and the sheet re-samples once per new
+  video frame.
+- Paused/scrub still seeks to the exact frame, but concurrent seeks
+  coalesce to the newest target.
+- An exact seek holds live playback briefly so MP4 export, which seeks
+  frame by frame, is never restarted between frames.
+- Reuse one sampling OffscreenCanvas instead of allocating per frame.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01BzcEuDYMjn12A8YtyMv3Bb
+---
+ docs/toolcraft/agent-worklog.md   |  14 +-
+ src/app/engine/engine-footage.ts  | 209 ++++++++++++++++++++++++------
+ src/app/engine/engine-source.ts   |  33 ++++-
+ src/app/engine/product-canvas.tsx |  53 ++++++--
+ 4 files changed, 256 insertions(+), 53 deletions(-)
+
+diff --git a/docs/toolcraft/agent-worklog.md b/docs/toolcraft/agent-worklog.md
+index 448fa0e..a7aa95b 100644
+--- a/docs/toolcraft/agent-worklog.md
++++ b/docs/toolcraft/agent-worklog.md
+@@ -100,6 +100,18 @@ Syntax Error builds halftone branding assets: a source is sampled onto a grid an
+ - Verification: `npx tsc -p tsconfig.json --noEmit` passes, and `engine-motion.test.ts` and `engine-camera.test.ts` pass, 39 of 39, including loop closure for every style. `vitest run src` ends 747 passed and 3 failed; the failures are two protected tests whose fixed 5 and 20 second limits this machine exceeds (one builds a TypeScript program of the whole project, about 80 seconds here) and one Windows path-separator assertion, and none exercises product code. In a browser, the expanded timeline shows Add keyframe buttons on 26 product controls, and adding a Cell size keyframe opens its row at 0.00s. Rendering every style to pixels at 2 cycles confirmed each returns to its first frame at the loop point and moves mid-loop. Deriving the grid from the decoded raster measured about 1 ms at 45 by 45 cells and 4 ms at 270 by 270, against about 15 ms for one decode. Keyframed playback itself was not observed live, because the browser pane was hidden and ran no animation frames. After the boundary corrections, `scripts/check-toolcraft-integrity.mjs` and `scripts/check-toolcraft-code-health.mjs` report only `src/app/engine/engine-footage.ts`; image, footage and wordmark sources render in the browser, and a wordmark set in Playfair Display rasterizes differently from Inter once the face loads.
+ - Risks: Risk: `src/app/engine/engine-footage.ts` still fails the product source boundary, because it creates a video element and listens for its seek events; this Toolcraft version offers product code no other frame-accurate video decode path, and its codec library is reserved for export. `npm test`, `ai:check` and focused feature verification stop on that module until footage moves to a DOM-free decoder or the Video source is removed. Risk: Footage still decodes one frame per played frame by nature; the decode-once guarantee covers image, SVG and wordmark sources. Risk: Brush and pattern keyframes change what the next stroke or fill writes; they do not animate cells already painted. Risk: At cell pitches that are not a whole multiple of the 2px sampling step, neighbouring cells average one or two samples, which can add faint banding at the finest settings. Risk: Keyframed playback was verified through the pipeline contract and pixel renders rather than watched live in this session.
+ 
++### syntax-error-006 — Real-time footage playback
++
++- Request: "the video player here is too laggy, I can't view uploaded video properly and run it"
++- Task type: Performance fix to one product owner, `src/app/engine/engine-footage.ts`, with its consumer `product-canvas.tsx`.
++- User-visible result: An uploaded video now plays smoothly in the preview while the timeline runs. Scrubbing still lands on the exact playhead frame, and MP4 export still renders exact frames.
++- Root cause: The preview seeked the hidden video element to the playhead on every timeline tick and awaited `seeked` before redrawing. A seek forces the browser to decode from the previous keyframe, so each animation frame cost a keyframe-to-target decode; on real footage that is tens to hundreds of milliseconds per frame, which is the lag.
++- Decision: The element now decodes in real time. While `timeline.isPlaying` is true and no viewport gesture holds the frame, `playFootage` starts the looping element and only re-syncs `currentTime` when it drifts more than 250 ms from the playhead; `onFootageFrame` polls `currentTime` on animation frames and re-samples the sheet once per new video frame. When paused or scrubbing, `seekFootage` parks the element on the exact frame as before, but concurrent requests coalesce to the newest target so a scrub never queues intermediate decodes. An exact seek holds live playback for 250 ms so export, which seeks frame after frame, is never restarted between artifact frames; playback resumes on the next playing tick once seeks stop. The sampling `OffscreenCanvas` is shared across rasterizations instead of allocated per frame.
++- Alternatives rejected: `requestVideoFrameCallback` — rejected because the element is never in the document and Chromium only reports composited frames for it; the callback never fired. Attaching the element to the page — rejected because product code may not mount media into the runtime host. Moving decode to WebCodecs — out of scope; the runtime reserves its codec library for export.
++- Performance intent: ordinary-product-work
++- Verification: `npx tsc -p tsconfig.json --noEmit` passes; `engine-motion`, `engine-camera`, `media-upload` and `video-export-settings` tests pass, 54 of 54. In headless Chromium with a 4 s VP9 test clip on the 1080×1080 artboard, six preview screenshots taken 300 ms apart were all distinct after the change against three of six before, and the hidden element advanced in real time with `paused: false` and no pending seek. Export MP4 through the sticky action produced a 4 s 1080×1080 artifact whose frames 10 and 70 show different footage, and the preview resumed animating after the export finished. `check-toolcraft-code-health.mjs` reports only the pre-existing `engine-footage.ts` boundary violations recorded in syntax-error-005.
++- Risks: Risk: The preview re-samples the source at the clip's frame rate; a 4K clip at the finest cell pitch still spends several milliseconds per frame in the summed-area pass. Risk: Live playback needs the browser's autoplay policy to allow a muted element to play; when it refuses, the preview falls back to the parked frame.
++
+ ## Decisions
+ 
+ ### Renderer
+@@ -162,7 +174,7 @@ Typecheck passes, and the product unit tests for the camera and every motion sty
+ ## Risks
+ 
+ - Risk: The protected preprocessing cannot run in this environment, so no `reference-parity` coverage exists; the blockers and the measurements behind them are recorded in the Decision Trail under Reference inputs.
+-- Risk: Footage export latency scales with per-frame video decode, though artifact cadence stays runtime-owned at 30 FPS.
++- Risk: Footage export latency scales with per-frame video decode, though artifact cadence stays runtime-owned at 30 FPS. Live preview no longer seeks per frame (syntax-error-006).
+ - Risk: Glyph units are rasterized through the system font stack, so a glyph absent from the available fonts falls back rather than failing loudly.
+ - Risk: Keyframed playback was verified through the pipeline contract and pixel renders; it was not watched live in the latest session because the browser pane ran no animation frames.
+ - Risk: `src/app/engine/engine-footage.ts` is the one product module that fails the product source boundary, so `npm test`, `ai:check` and focused feature verification stop on it; the Decision Trail entry syntax-error-005 records why and the two ways to clear it.
+diff --git a/src/app/engine/engine-footage.ts b/src/app/engine/engine-footage.ts
+index a6415b9..e0e2a4b 100644
+--- a/src/app/engine/engine-footage.ts
++++ b/src/app/engine/engine-footage.ts
+@@ -4,9 +4,35 @@
+  * library is reserved for artifact export, so a hidden element decoded by the
+  * browser is the only frame-accurate path to a footage frame. Everything
+  * outside this module sees footage only as a drawable frame.
++ *
++ * Two access modes share the element. Live playback lets the browser decode
++ * in real time (`playFootage`) and reports each presented frame through
++ * `onFootageFrame`, because seeking a media element once per animation tick
++ * forces a keyframe decode per frame and stalls the preview. Scrubbing and
++ * export use `seekFootage`, which parks the element on one exact frame;
++ * concurrent seek requests coalesce so only the latest target is decoded.
+  */
+ 
+-const videos = new Map<string, { element: HTMLVideoElement; url: string }>();
++type FootageEntry = {
++  element: HTMLVideoElement;
++  /** When an exact-frame seek was last requested; live playback yields to it. */
++  heldAt?: number;
++  /** In-flight seek: the newest requested target and everyone waiting on it. */
++  seek?: { resolvers: Array<(element: HTMLVideoElement) => void>; target: number };
++  url: string;
++};
++
++const videos = new Map<string, FootageEntry>();
++
++/** How far live playback may drift from the timeline before it is re-synced. */
++const DRIFT_TOLERANCE_S = 0.25;
++
++/**
++ * How long after an exact-frame seek live playback stays parked. Export seeks
++ * frame after frame, so this keeps the preview from restarting the element
++ * between artifact frames; once seeks stop, playback resumes on the next tick.
++ */
++const EXACT_FRAME_HOLD_MS = 250;
+ 
+ /** Keeps one hidden video element per footage asset for frame-accurate seeks. */
+ export function registerFootage(
+@@ -18,6 +44,7 @@ export function registerFootage(
+   const element = document.createElement("video");
+   element.crossOrigin = "anonymous";
+   element.muted = true;
++  element.loop = true;
+   element.playsInline = true;
+   element.preload = "auto";
+   element.src = url;
+@@ -31,12 +58,39 @@ export function peekFootage(resourceRef: string): HTMLVideoElement | null {
+   return entry.element.readyState >= 2 ? entry.element : null;
+ }
+ 
++function clampToClip(element: HTMLVideoElement, timeSeconds: number): number {
++  return Math.min(
++    Math.max(timeSeconds % element.duration, 0),
++    Math.max(element.duration - 1e-3, 0),
++  );
++}
++
++/**
++ * Resolves once the element knows its duration, or null when it never will.
++ * Metadata is the minimum both playback and seeking need.
++ */
++function awaitMetadata(element: HTMLVideoElement): Promise<HTMLVideoElement | null> {
++  if (element.readyState >= 1) return Promise.resolve(element);
++  return new Promise((resolve) => {
++    const done = (result: HTMLVideoElement | null) => {
++      element.removeEventListener("loadedmetadata", onMeta);
++      element.removeEventListener("error", onError);
++      resolve(result);
++    };
++    const onMeta = () => done(element);
++    const onError = () => done(null);
++    element.addEventListener("loadedmetadata", onMeta);
++    element.addEventListener("error", onError);
++  });
++}
++
+ /**
+  * Seeks footage to one timeline time and resolves once that frame is painted.
+  * Export needs the exact frame, so this awaits `seeked` rather than sampling
+- * whatever the element happens to be showing, and a clip already parked on
+- * the target waits for its frame data rather than resolving before it can be
+- * drawn.
++ * whatever the element happens to be showing. While a seek is in flight, a
++ * newer request only replaces the target: the element is never asked to decode
++ * intermediate frames a scrub has already moved past. Seeking pauses live
++ * playback; `playFootage` resumes it on the next playing tick.
+  */
+ export function seekFootage(
+   resourceRef: string,
+@@ -45,59 +99,134 @@ export function seekFootage(
+   const entry = videos.get(resourceRef);
+   if (!entry) return Promise.resolve(null);
+   const element = entry.element;
+-  return new Promise((resolve) => {
+-    const ready = () => {
+-      if (!Number.isFinite(element.duration) || element.duration <= 0) {
+-        resolve(element.readyState >= 2 ? element : null);
+-        return;
+-      }
+-      const target = Math.min(
+-        Math.max(timeSeconds % element.duration, 0),
+-        Math.max(element.duration - 1e-3, 0),
+-      );
+-      if (Math.abs(element.currentTime - target) < 1e-3) {
+-        if (element.readyState >= 2) {
+-          resolve(element);
+-          return;
+-        }
++  return awaitMetadata(element).then((ready) => {
++    if (!ready) return null;
++    if (!Number.isFinite(element.duration) || element.duration <= 0) {
++      return element.readyState >= 2 ? element : null;
++    }
++    entry.heldAt = performance.now();
++    if (!element.paused) element.pause();
++    const target = clampToClip(element, timeSeconds);
++
++    if (entry.seek) {
++      entry.seek.target = target;
++      return new Promise<HTMLVideoElement>((resolve) => {
++        entry.seek?.resolvers.push(resolve);
++      });
++    }
++
++    if (Math.abs(element.currentTime - target) < 1e-3 && !element.seeking) {
++      if (element.readyState >= 2) return element;
++      return new Promise<HTMLVideoElement>((resolve) => {
+         const onData = () => {
+           element.removeEventListener("loadeddata", onData);
+           resolve(element);
+         };
+         element.addEventListener("loadeddata", onData);
+-        return;
+-      }
++      });
++    }
++
++    return new Promise<HTMLVideoElement>((resolve) => {
++      const seek = { resolvers: [resolve], target };
++      entry.seek = seek;
+       const onSeeked = () => {
++        // A newer target arrived mid-flight: chase it before settling anyone.
++        if (Math.abs(element.currentTime - seek.target) >= 1e-3) {
++          element.currentTime = seek.target;
++          return;
++        }
+         element.removeEventListener("seeked", onSeeked);
+-        resolve(element);
++        entry.seek = undefined;
++        for (const settle of seek.resolvers) settle(element);
+       };
+       element.addEventListener("seeked", onSeeked);
+       element.currentTime = target;
+-    };
+-    if (element.readyState >= 1) {
+-      ready();
+-      return;
+-    }
+-    const onMeta = () => {
+-      element.removeEventListener("loadedmetadata", onMeta);
+-      element.removeEventListener("error", onError);
+-      ready();
+-    };
+-    const onError = () => {
+-      element.removeEventListener("loadedmetadata", onMeta);
+-      element.removeEventListener("error", onError);
+-      resolve(null);
+-    };
+-    element.addEventListener("loadedmetadata", onMeta);
+-    element.addEventListener("error", onError);
++    });
+   });
+ }
+ 
++/**
++ * Keeps footage playing in real time alongside the timeline. Idempotent and
++ * cheap to call on every tick: it starts the element if it is parked and only
++ * re-syncs `currentTime` when playback has drifted from the playhead, so the
++ * browser decodes sequentially instead of seeking per frame.
++ */
++export function playFootage(resourceRef: string, timeSeconds: number): void {
++  const entry = videos.get(resourceRef);
++  if (!entry || entry.seek) return;
++  if (
++    entry.heldAt !== undefined &&
++    performance.now() - entry.heldAt < EXACT_FRAME_HOLD_MS
++  ) {
++    return;
++  }
++  const element = entry.element;
++  if (element.readyState < 1) {
++    void awaitMetadata(element).then((ready) => {
++      if (ready) playFootage(resourceRef, timeSeconds);
++    });
++    return;
++  }
++  if (!Number.isFinite(element.duration) || element.duration <= 0) return;
++  const target = clampToClip(element, timeSeconds);
++  const drift = Math.abs(element.currentTime - target);
++  // Near the loop seam the wrapped distance is what matters.
++  const wrapped = Math.min(drift, element.duration - drift);
++  if (wrapped > DRIFT_TOLERANCE_S && !element.seeking) {
++    element.currentTime = target;
++  }
++  if (element.paused) {
++    void element.play().catch(() => {
++      // Autoplay policy or a detached source; the paused frame still renders.
++    });
++  }
++}
++
++export function pauseFootage(resourceRef: string): void {
++  const element = videos.get(resourceRef)?.element;
++  if (element && !element.paused) element.pause();
++}
++
++/**
++ * Calls back whenever the element has advanced to a new frame while playing,
++ * so the preview re-samples footage at the clip's own cadence rather than on
++ * every timeline tick. The element is never attached to the document, and
++ * `requestVideoFrameCallback` only reports frames the page composites, so
++ * this polls `currentTime` on animation frames instead. Returns the
++ * unsubscribe function.
++ */
++export function onFootageFrame(
++  resourceRef: string,
++  callback: () => void,
++): () => void {
++  const element = videos.get(resourceRef)?.element;
++  if (!element) return () => {};
++  let active = true;
++  let lastTime = -1;
++  let frame = 0;
++  const tick = () => {
++    if (!active) return;
++    if (element.currentTime !== lastTime && element.readyState >= 2) {
++      lastTime = element.currentTime;
++      callback();
++    }
++    frame = requestAnimationFrame(tick);
++  };
++  frame = requestAnimationFrame(tick);
++  return () => {
++    active = false;
++    cancelAnimationFrame(frame);
++  };
++}
++
+ /** Drops elements for footage assets that are no longer attached. */
+ export function releaseFootage(active: ReadonlySet<string>): void {
+   for (const key of [...videos.keys()]) {
+     if (!active.has(key)) {
+-      videos.get(key)?.element.removeAttribute("src");
++      const element = videos.get(key)?.element;
++      element?.pause();
++      element?.removeAttribute("src");
++      element?.load();
+       videos.delete(key);
+     }
+   }
+diff --git a/src/app/engine/engine-source.ts b/src/app/engine/engine-source.ts
+index e6f7aeb..8929cbf 100644
+--- a/src/app/engine/engine-source.ts
++++ b/src/app/engine/engine-source.ts
+@@ -118,6 +118,33 @@ function createBuffer(
+   return canvas.getContext("2d", { willReadFrequently: true });
+ }
+ 
++let sharedBuffer: {
++  context: OffscreenCanvasRenderingContext2D;
++  height: number;
++  width: number;
++} | null = null;
++
++/**
++ * One reusable sampling surface. Every rasterizer clears it, draws, and reads
++ * it back synchronously, so sharing is safe and footage playback stops
++ * allocating a fresh canvas for every presented frame.
++ */
++function sampleBuffer(
++  width: number,
++  height: number,
++): OffscreenCanvasRenderingContext2D | null {
++  if (
++    sharedBuffer &&
++    sharedBuffer.width === width &&
++    sharedBuffer.height === height
++  ) {
++    return sharedBuffer.context;
++  }
++  const context = createBuffer(width, height);
++  sharedBuffer = context ? { context, height, width } : null;
++  return context;
++}
++
+ /**
+  * The decoded source at a fixed sampling resolution, independent of cell
+  * size. Summed-area tables of premultiplied RGB let any grid resolution be
+@@ -209,7 +236,7 @@ export function rasterizeDrawable(
+   frameHeight: number,
+ ): SourceRaster | null {
+   const size = sampleSize(frameWidth, frameHeight);
+-  const context = createBuffer(size.width, size.height);
++  const context = sampleBuffer(size.width, size.height);
+   if (!context) return null;
+   const rect = coverRect(drawable.width, drawable.height, size.width, size.height);
+   context.clearRect(0, 0, size.width, size.height);
+@@ -226,7 +253,7 @@ export function rasterizeFootage(
+   const videoHeight = element.videoHeight;
+   if (videoWidth <= 0 || videoHeight <= 0) return null;
+   const size = sampleSize(frameWidth, frameHeight);
+-  const context = createBuffer(size.width, size.height);
++  const context = sampleBuffer(size.width, size.height);
+   if (!context) return null;
+   const rect = coverRect(videoWidth, videoHeight, size.width, size.height);
+   context.clearRect(0, 0, size.width, size.height);
+@@ -303,7 +330,7 @@ export function rasterizeWordmark(
+   frameHeight: number,
+ ): SourceRaster | null {
+   const size = sampleSize(frameWidth, frameHeight);
+-  const context = createBuffer(size.width, size.height);
++  const context = sampleBuffer(size.width, size.height);
+   if (!context) return null;
+   context.clearRect(0, 0, size.width, size.height);
+   const content = applyTextCase(text, type.textCase).trim();
+diff --git a/src/app/engine/product-canvas.tsx b/src/app/engine/product-canvas.tsx
+index 6fdb8fb..23b3dfb 100644
+--- a/src/app/engine/product-canvas.tsx
++++ b/src/app/engine/product-canvas.tsx
+@@ -14,7 +14,13 @@ import {
+ 
+ import { unprojectPoint } from "./engine-camera";
+ import { applyStroke, cellLine, type EditLayer } from "./engine-edit";
+-import { registerFootage, seekFootage } from "./engine-footage";
++import {
++  onFootageFrame,
++  pauseFootage,
++  playFootage,
++  registerFootage,
++  seekFootage,
++} from "./engine-footage";
+ import { findSourceAsset, peekSourceRaster } from "./engine-grid";
+ import {
+   renderEditorOverlays,
+@@ -36,6 +42,7 @@ import styles from "./product-canvas.module.css";
+ type TimelineSlice = Readonly<{
+   currentTimeSeconds: number;
+   durationSeconds: number;
++  isPlaying: boolean;
+ }>;
+ 
+ type Cell = readonly [number, number];
+@@ -62,13 +69,15 @@ function selectTimeline(state: ToolcraftState): TimelineSlice {
+   return {
+     currentTimeSeconds: state.timeline.currentTimeSeconds,
+     durationSeconds: state.timeline.durationSeconds,
++    isPlaying: state.timeline.isPlaying,
+   };
+ }
+ 
+ function timelineEqual(previous: TimelineSlice, next: TimelineSlice): boolean {
+   return (
+     previous.currentTimeSeconds === next.currentTimeSeconds &&
+-    previous.durationSeconds === next.durationSeconds
++    previous.durationSeconds === next.durationSeconds &&
++    previous.isPlaying === next.isPlaying
+   );
+ }
+ 
+@@ -176,20 +185,46 @@ export function ProductCanvas(): React.JSX.Element {
+   if (!viewportActive) heldProgressRef.current = liveProgress;
+   const loopProgress = viewportActive ? heldProgressRef.current : liveProgress;
+ 
+-  // Footage follows the playhead so preview and exported frames agree.
++  // Footage follows the playhead so preview and exported frames agree. While
++  // the timeline plays (and no gesture holds the frame) the element decodes in
++  // real time and the sheet re-samples once per presented video frame; seeking
++  // per tick would force a keyframe decode on every animation frame.
++  const footagePlaying =
++    settings.sourceKind === "video" && timeline.isPlaying && !viewportActive;
++  const playheadSeconds = loopProgress * Math.max(timeline.durationSeconds, 0);
++
++  // Keyed on the URL as well: the element only exists once the asset's
++  // presentation URL has resolved and the decode effect above registered it.
++  React.useEffect(() => {
++    if (!footagePlaying || !sourceAsset || !sourceUrl) return;
++    playFootage(sourceAsset.id, playheadSeconds);
++    const unsubscribe = onFootageFrame(sourceAsset.id, () => {
++      setSourceRevision((revision) => revision + 1);
++    });
++    return () => {
++      unsubscribe();
++      pauseFootage(sourceAsset.id);
++    };
++    // The playhead only re-syncs playback on drift, so it is read, not tracked.
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [footagePlaying, sourceAsset, sourceUrl]);
++
++  React.useEffect(() => {
++    if (!footagePlaying || !sourceAsset) return;
++    playFootage(sourceAsset.id, playheadSeconds);
++  }, [footagePlaying, playheadSeconds, sourceAsset]);
++
++  // Paused or scrubbing: park the element on the exact playhead frame.
+   React.useEffect(() => {
+-    if (settings.sourceKind !== "video" || !sourceAsset) return;
++    if (settings.sourceKind !== "video" || footagePlaying || !sourceAsset) return;
+     let active = true;
+-    void seekFootage(
+-      sourceAsset.id,
+-      loopProgress * Math.max(timeline.durationSeconds, 0),
+-    ).then(() => {
++    void seekFootage(sourceAsset.id, playheadSeconds).then(() => {
+       if (active) setSourceRevision((revision) => revision + 1);
+     });
+     return () => {
+       active = false;
+     };
+-  }, [loopProgress, settings.sourceKind, sourceAsset, timeline.durationSeconds]);
++  }, [footagePlaying, playheadSeconds, settings.sourceKind, sourceAsset]);
+ 
+   const rect = frame.kind === "ready" ? frame.rect : null;
+   const width = rect?.width ?? 0;
+-- 
+2.43.0
+

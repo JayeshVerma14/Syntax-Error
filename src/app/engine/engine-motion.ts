@@ -34,8 +34,10 @@ export type MotionSample = Readonly<{
   markShift: number;
   /** Added rotation in radians. */
   rotation: number;
-  /** Size multiplier. */
+  /** Size multiplier; with fixed-size glyphs it moves along the ramp instead. */
   scale: number;
+  /** Horizontal scale for card flips; negative shows the mirrored back face. */
+  squash: number;
 }>;
 
 const STILL: MotionSample = {
@@ -45,7 +47,10 @@ const STILL: MotionSample = {
   markShift: 0,
   rotation: 0,
   scale: 1,
+  squash: 1,
 };
+
+const HIDDEN: MotionSample = { ...STILL, scale: 0 };
 
 const TAU = Math.PI * 2;
 
@@ -67,6 +72,24 @@ function bump(phase: number, centre: number, width: number): number {
 function smoothstep(value: number): number {
   const x = Math.min(1, Math.max(0, value));
   return x * x * (3 - 2 * x);
+}
+
+/** Loop envelope: 0 at both ends of a cycle, 1 at its middle. */
+function swell(t: number): number {
+  return 0.5 - 0.5 * Math.cos(TAU * wrap(t));
+}
+
+/** Smooth two-dimensional value noise in 0..1, for organic cluster growth. */
+function valueNoise(x: number, y: number): number {
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const sx = smoothstep(x - x0);
+  const sy = smoothstep(y - y0);
+  const a = noise(x0, y0, 51);
+  const b = noise(x0 + 1, y0, 51);
+  const c = noise(x0, y0 + 1, 51);
+  const d = noise(x0 + 1, y0 + 1, 51);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
 }
 
 /** Deterministic per-cell noise in 0..1; `salt` keeps channels independent. */
@@ -304,6 +327,60 @@ export function sampleMotion(
         dx: 0.7 * strength * (noise(column, row, tick + 200) - 0.5),
         dy: 0.7 * strength * (noise(column, row, tick + 300) - 0.5),
         rotation: 0.5 * strength * (noise(column, row, tick + 400) - 0.5),
+      };
+    }
+
+    case "dissolve": {
+      // Cells drop out in a random order and come back; stagger pulls the
+      // order from pure noise toward rings around the centre.
+      const threshold = (1 - spread) * noise(column, row, 31) + spread * radial;
+      return threshold < strength * swell(t) ? HIDDEN : STILL;
+    }
+
+    case "grow": {
+      // Clusters seed and spread across the sheet, then recede, like cells
+      // colonising a dish; every loop starts and ends empty.
+      const scaleCells = 3 + 9 * (1 - spread);
+      const field = valueNoise(column / scaleCells, row / scaleCells);
+      const level = swell(t) * 1.12 - 0.06;
+      const grown = smoothstep((level - field) / 0.07);
+      return { ...STILL, scale: 1 - strength + strength * grown };
+    }
+
+    case "resolve": {
+      // Pixels flicker at random, then lock into the image in a wave along
+      // the direction, hold, and break up again before the loop closes.
+      const phase = wrap(t);
+      const lock = 0.08 + 0.45 * (spread * along + (1 - spread) * noise(column, row, 33));
+      const release = 0.86 + 0.12 * noise(column, row, 34);
+      if (phase >= lock && phase < release) return STILL;
+      if (noise(column, row, 35) > strength) return STILL;
+      const tick = Math.floor(phase * 30);
+      return noise(column, row, tick + 500) < 0.5
+        ? HIDDEN
+        : { ...STILL, markShift: Math.floor(noise(column, row, tick + 600) * 3) };
+    }
+
+    case "flip": {
+      // Each mark turns over like a card, one full turn per cycle, the turn
+      // travelling along the direction and holding flat between flips.
+      const phase = wrap(t - spread * along);
+      if (phase > 0.35 || noise(column, row, 37) > 0.25 + 0.75 * strength) return STILL;
+      return { ...STILL, squash: Math.cos(TAU * smoothstep(phase / 0.35)) };
+    }
+
+    case "scatter": {
+      // Marks burst away from the centre, tumbling, and fall back into place.
+      const out = Math.sin(Math.PI * wrap(t)) ** 2;
+      const du = u - 0.5;
+      const dv = v - 0.5;
+      const length = Math.max(1e-6, Math.hypot(du, dv));
+      const reach = strength * (1.5 + 6 * spread) * (0.4 + noise(column, row, 39)) * out;
+      return {
+        ...STILL,
+        dx: (du / length) * reach,
+        dy: (dv / length) * reach,
+        rotation: TAU * strength * (noise(column, row, 40) - 0.5) * out,
       };
     }
 

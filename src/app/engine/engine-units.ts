@@ -5,7 +5,7 @@
  *
  * `glyph` is the extension the reference tool lacked. Every printable
  * character or symbol can become the repeated unit, selected either by tone
- * ramp or by position.
+ * ramp, by position, or by spelling a phrase.
  */
 
 import {
@@ -44,7 +44,11 @@ export function resolveShape(
 
 function morphSequence(mark: UnitMark): readonly UnitMark[] {
   if (mark === "glyph") return ["glyph", "circle", "square", "ring"];
-  if (mark === "bar") return ["bar", "square", "circle", "octagon"];
+  if (mark === "bar" || mark === "dash") return ["bar", "square", "dash", "circle"];
+  if (mark === "plus" || mark === "cross" || mark === "star") {
+    return ["plus", "cross", "star", "circle"];
+  }
+  if (mark === "checker" || mark === "seal") return ["checker", "seal", "square", "ring"];
   return RANDOM_SHAPES;
 }
 
@@ -84,38 +88,16 @@ function cellHash(column: number, row: number): number {
 export type UnitDraw = Readonly<{
   angleRadians: number;
   color: string;
-  /** Selected glyph for the `glyph` mark; ignored by geometric marks. */
+  /** Resolved CSS font for the `glyph` mark; ignored by geometric marks. */
+  font: string;
+  /** Selected character for the `glyph` mark; ignored by geometric marks. */
   glyph: string;
   size: number;
+  /** Horizontal scale for card flips; 1 draws the mark unchanged. */
+  squash: number;
   x: number;
   y: number;
 }>;
-
-/** Glyphs read lighter than solid marks at equal size; this restores parity. */
-const GLYPH_EM_COMPENSATION = 1.45;
-
-/**
- * Font sizes snap to 2px steps. The browser caches rasterized glyphs per font
- * size, so a continuous size per mark (which tone and perspective both
- * produce) misses that cache on every draw: measured at 2000 glyphs on a
- * 3240px backing, unique sizes cost 1067ms and 2px steps cost 135ms. A 2px
- * step is below what reads as a size change at these densities.
- */
-const GLYPH_SIZE_STEP = 2;
-const glyphFonts = new Map<number, string>();
-
-function glyphFont(size: number): string {
-  const snapped = Math.max(
-    GLYPH_SIZE_STEP,
-    Math.round(size / GLYPH_SIZE_STEP) * GLYPH_SIZE_STEP,
-  );
-  let font = glyphFonts.get(snapped);
-  if (!font) {
-    font = `${snapped}px "Inter", system-ui, sans-serif`;
-    glyphFonts.set(snapped, font);
-  }
-  return font;
-}
 
 function octagonPath(
   context: CanvasRenderingContext2D,
@@ -132,6 +114,141 @@ function octagonPath(
   context.closePath();
 }
 
+function roundedPath(
+  context: CanvasRenderingContext2D,
+  half: number,
+  radius: number,
+): void {
+  const r = Math.min(radius, half);
+  context.beginPath();
+  context.moveTo(-half + r, -half);
+  context.arcTo(half, -half, half, half, r);
+  context.arcTo(half, half, -half, half, r);
+  context.arcTo(-half, half, -half, -half, r);
+  context.arcTo(-half, -half, half, -half, r);
+  context.closePath();
+}
+
+/** A centred bar of the given length and thickness at one angle. */
+function spoke(
+  context: CanvasRenderingContext2D,
+  length: number,
+  thickness: number,
+  angle: number,
+): void {
+  context.save();
+  if (angle !== 0) context.rotate(angle);
+  context.fillRect(-length / 2, -thickness / 2, length, thickness);
+  context.restore();
+}
+
+/**
+ * Fills one mark at the origin in the current fill style and composite mode.
+ * Transforms are the caller's; this function owns only the geometry.
+ */
+function fillMark(
+  context: CanvasRenderingContext2D,
+  shape: UnitMark,
+  unit: UnitDraw,
+  cell: number,
+): void {
+  const size = unit.size;
+  const half = size / 2;
+  switch (shape) {
+    case "circle":
+      context.beginPath();
+      context.arc(0, 0, half, 0, Math.PI * 2);
+      context.fill();
+      return;
+    case "square":
+      context.fillRect(-half, -half, size, size);
+      return;
+    case "rounded":
+      roundedPath(context, half, size * 0.28);
+      context.fill();
+      return;
+    case "octagon":
+      octagonPath(context, half);
+      context.fill();
+      return;
+    case "ring":
+      // Even-odd keeps the hole crisp at any size, unlike a stroked circle.
+      context.beginPath();
+      context.arc(0, 0, half, 0, Math.PI * 2);
+      context.arc(0, 0, half * 0.52, 0, Math.PI * 2, true);
+      context.fill("evenodd");
+      return;
+    case "diamond":
+      context.beginPath();
+      context.moveTo(0, -half);
+      context.lineTo(half, 0);
+      context.lineTo(0, half);
+      context.lineTo(-half, 0);
+      context.closePath();
+      context.fill();
+      return;
+    case "bar": {
+      // The bar keeps its width and lets tone drive its length.
+      const width = Math.max(1, cell * 0.34);
+      context.fillRect(-width / 2, -half, width, size);
+      return;
+    }
+    case "dash": {
+      // The horizontal twin of the bar, for line-orientation halftones.
+      const height = Math.max(1, cell * 0.34);
+      context.fillRect(-half, -height / 2, size, height);
+      return;
+    }
+    case "plus": {
+      const thickness = Math.max(1, size * 0.26);
+      spoke(context, size, thickness, 0);
+      spoke(context, size, thickness, Math.PI / 2);
+      return;
+    }
+    case "cross": {
+      const thickness = Math.max(1, size * 0.24);
+      spoke(context, size * 1.05, thickness, Math.PI / 4);
+      spoke(context, size * 1.05, thickness, -Math.PI / 4);
+      return;
+    }
+    case "star": {
+      // A six-point asterisk: three spokes sixty degrees apart.
+      const thickness = Math.max(1, size * 0.17);
+      for (let spokeIndex = 0; spokeIndex < 3; spokeIndex += 1) {
+        spoke(context, size, thickness, (Math.PI / 3) * spokeIndex + Math.PI / 2);
+      }
+      return;
+    }
+    case "checker":
+      // A two-by-two checker: the smallest repeat that still reads as texture.
+      context.fillRect(-half, -half, half, half);
+      context.fillRect(0, 0, half, half);
+      return;
+    case "seal": {
+      // A filled disc with an asterisk punched out of it.
+      context.beginPath();
+      context.arc(0, 0, half, 0, Math.PI * 2);
+      context.fill();
+      if (context.globalCompositeOperation === "destination-out") return;
+      context.globalCompositeOperation = "destination-out";
+      const thickness = Math.max(1, size * 0.12);
+      for (let spokeIndex = 0; spokeIndex < 4; spokeIndex += 1) {
+        spoke(context, size * 0.66, thickness, (Math.PI / 4) * spokeIndex);
+      }
+      context.globalCompositeOperation = "source-over";
+      return;
+    }
+    case "glyph": {
+      const glyph = unit.glyph.length > 0 ? unit.glyph : "*";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.font = unit.font;
+      context.fillText(glyph, 0, 0);
+      return;
+    }
+  }
+}
+
 /**
  * Draws one unit. The caller owns cell placement and tone; this function owns
  * only the mark itself.
@@ -142,58 +259,37 @@ export function drawUnit(
   unit: UnitDraw,
   cell: number,
 ): void {
-  if (unit.size <= 0.05) return;
-  const half = unit.size / 2;
+  if (unit.size <= 0.05 || Math.abs(unit.squash) < 0.02) return;
   context.save();
   context.translate(unit.x, unit.y);
   if (unit.angleRadians !== 0) context.rotate(unit.angleRadians);
+  if (unit.squash !== 1) context.scale(unit.squash, 1);
   context.fillStyle = unit.color;
-
-  if (shape === "circle") {
-    context.beginPath();
-    context.arc(0, 0, half, 0, Math.PI * 2);
-    context.fill();
-  } else if (shape === "square") {
-    context.fillRect(-half, -half, unit.size, unit.size);
-  } else if (shape === "octagon") {
-    octagonPath(context, half);
-    context.fill();
-  } else if (shape === "ring") {
-    // Even-odd keeps the hole crisp at any size, unlike a stroked circle.
-    context.beginPath();
-    context.arc(0, 0, half, 0, Math.PI * 2);
-    context.arc(0, 0, half * 0.52, 0, Math.PI * 2, true);
-    context.fill("evenodd");
-  } else if (shape === "bar") {
-    // The bar keeps full cell width and lets tone drive its length.
-    const width = Math.max(1, cell * 0.34);
-    context.fillRect(-width / 2, -half, width, unit.size);
-  } else {
-    const glyph = unit.glyph.length > 0 ? unit.glyph : "*";
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    // A glyph inks far less of its em box than a filled disc of the same size,
-    // so it is drawn larger to keep tone comparable across shapes.
-    context.font = glyphFont(unit.size * GLYPH_EM_COMPENSATION);
-    context.fillText(glyph, 0, 0);
-  }
+  fillMark(context, shape, unit, cell);
   context.restore();
 }
 
-/** Picks the glyph for one cell: tone ramp when enabled, otherwise position. */
-export function selectGlyph(
-  glyphs: readonly string[],
-  tone: number,
-  column: number,
-  row: number,
-  useRamp: boolean,
-  shift = 0,
-): string {
-  if (glyphs.length === 0) return "*";
-  const base = useRamp
-    ? Math.min(glyphs.length - 1, Math.max(0, Math.floor(tone * glyphs.length)))
-    : (column + row) % glyphs.length;
-  const length = glyphs.length;
-  // Motion can borrow a neighbouring character, for scrambles and falling code.
-  return glyphs[(((base + shift) % length) + length) % length];
+/**
+ * Draws a knocked-out unit: the whole cell box is filled and the mark is cut
+ * out of it, so neighbouring boxes merge into one highlighted run the way a
+ * selected line of text does.
+ */
+export function drawKnockout(
+  context: CanvasRenderingContext2D,
+  shape: UnitMark,
+  unit: UnitDraw,
+  cell: number,
+  box: Readonly<{ height: number; width: number }>,
+): void {
+  if (Math.abs(unit.squash) < 0.02) return;
+  context.save();
+  context.translate(unit.x, unit.y);
+  if (unit.squash !== 1) context.scale(unit.squash, 1);
+  context.fillStyle = unit.color;
+  // A hairline of overlap keeps adjacent boxes from showing a seam.
+  context.fillRect(-box.width / 2 - 0.3, -box.height / 2, box.width + 0.6, box.height);
+  if (unit.angleRadians !== 0) context.rotate(unit.angleRadians);
+  context.globalCompositeOperation = "destination-out";
+  fillMark(context, shape, unit, cell);
+  context.restore();
 }

@@ -4,6 +4,7 @@ import type {
   ToolcraftTransferMode,
 } from "./acceptance/types";
 import { editingAcceptance } from "./acceptance-data/acceptance-rows-editing";
+import { layerAcceptance } from "./acceptance-data/acceptance-rows-layers";
 import { samplingAcceptance } from "./acceptance-data/acceptance-rows-sampling";
 import { viewAcceptance } from "./acceptance-data/acceptance-rows-view";
 
@@ -40,51 +41,13 @@ export const appProductReadiness: ToolcraftProductReadiness = {
     svg: { mode: "not-requested" },
     video: { evidence: videoRequestEvidence, mode: "user-requested" },
   },
-  interactionOwnership: [
-    {
-      alternative: {
-        reason:
-          "A panel copy would ask the user to type cell coordinates for a gesture whose whole value is landing marks by eye.",
-        surface: "panel",
-      },
-      capability: "direct-spatial-edit",
-      evidence: {
-        detail:
-          "The inspected tool paints cells by pressing and dragging on the artwork, with a Shift-click straight-line shortcut.",
-        source: "reference",
-      },
-      id: "cell-paint",
-      reason:
-        "Painting is a spatial gesture over the output; the canvas preserves correspondence between where the pointer is and which cell changes.",
-      surface: "canvas",
-      target: "controls.setValue",
-    },
-    {
-      alternative: {
-        reason:
-          "Canvas chrome for ink, brush mode and size would sit permanently over the artwork being judged.",
-        surface: "canvas",
-      },
-      capability: "property-edit",
-      evidence: {
-        detail:
-          "The inspected tool keeps drawing colour, brush type and brush size in its side panel while the canvas stays pure output.",
-        source: "reference",
-      },
-      id: "brush-properties",
-      reason:
-        "The brush settings are values to configure, not positions to point at, so the panel keeps them readable and out of the artwork.",
-      selectionScope: { mode: "global" },
-      surface: "panel",
-      target: "tool.color",
-    },
-  ],
+  interactionOwnership: [],
   mode: "product",
   productName: "Syntax Error",
   productSummary:
-    "Turns an image, vector, footage frame, or wordmark into a grid of repeated units - discs, bars, rings, or any typed glyph - quantized to a brand ink list, for building halftone branding assets.",
+    "Turns an image, vector, footage frame, or wordmark into a grid of repeated units - discs, bars, rings, tiles, or any typed glyph set as terminal type - quantized to a brand ink list, with burst, swirl and caption layers, for building halftone and glyph-film branding assets.",
   requestedBehavior:
-    "A branding halftone tool with four source kinds, a selectable unit shape that also accepts arbitrary symbols and glyphs as the repeated unit, dither engines, a column layout, a glyph tone ramp, editable brand ink lists, and PNG plus MP4 delivery.",
+    "A branding halftone tool with four source kinds, a selectable unit shape that also accepts arbitrary symbols and glyphs as the repeated unit, dither engines, a column and a character-cell layout, a glyph tone ramp with boxed highlights, editable brand ink lists, procedural burst, swirl and caption layers, and PNG plus MP4 delivery.",
   viewInteraction: {
     authority: {
       kind: "explicit-user-request",
@@ -97,6 +60,7 @@ export const appProductReadiness: ToolcraftProductReadiness = {
 export const appAcceptance: readonly ToolcraftComponentAcceptance[] = [
   ...samplingAcceptance,
   ...editingAcceptance,
+  ...layerAcceptance,
   ...viewAcceptance,
 ];
 

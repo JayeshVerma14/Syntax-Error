@@ -8,10 +8,7 @@ import {
   MARK_OPTIONS,
   UNIT_SHAPE_OPTIONS,
 } from "../engine/engine-constants";
-import {
-  whenGlyphShape,
-  whenMixShape,
-} from "./schema-conditions";
+import { whenAnyShape, whenGlyphShape, whenMixShape } from "./schema-conditions";
 
 export const backgroundSection: ToolcraftControlSectionSchema = {
   controls: {
@@ -169,9 +166,12 @@ export const gridSection: ToolcraftControlSectionSchema = {
       options: [
         { label: "Square", value: "square" },
         { label: "Columns", value: "columns" },
+        { label: "Type", value: "type" },
       ],
+      description:
+        "Type lays the grid out as monospaced character cells, narrower than they are tall, like a terminal.",
       performanceReason:
-        "Layout selects a build strategy at a comparable unit count.",
+        "Layout selects a build strategy; character cells hold at most the per-axis cell cap.",
       performanceRole: "responsiveness",
       target: "grid.mode",
       type: "segmented",
@@ -222,6 +222,24 @@ export const unitSection: ToolcraftControlSectionSchema = {
       target: "unit.shape",
       type: "select",
     },
+    terminal: {
+      actions: [
+        {
+          icon: "wand-sparkles",
+          label: "Terminal look",
+          value: "glyph.terminal",
+        },
+      ],
+      applicability: whenAnyShape,
+      description:
+        "White monospaced characters on a character grid over saturated blue, the brightest cells boxed and a quiet idle field held clear of the subject.",
+      label: "Look",
+      performanceReason:
+        "The look is one batch of setting changes at the current grid size.",
+      performanceRole: "responsiveness",
+      target: "glyph.terminal",
+      type: "actions",
+    },
     mix: {
       applicability: whenMixShape,
       defaultValue: DEFAULT_MIX,
@@ -261,7 +279,7 @@ export const unitSection: ToolcraftControlSectionSchema = {
       applicability: whenGlyphShape,
       defaultValue: DEFAULT_GLYPHS,
       description:
-        "Each entry is one printable character or symbol drawn in place of a dot.",
+        "Each entry is one printable character or symbol, ordered faintest to densest.",
       itemControl: {
         defaultValue: "*",
         performanceReason:
@@ -289,6 +307,61 @@ export const unitSection: ToolcraftControlSectionSchema = {
       target: "unit.ramp",
       type: "switch",
     },
+    phrase: {
+      applicability: whenGlyphShape,
+      commitMode: "content",
+      defaultValue: "",
+      description:
+        "When set, glyph cells spell this text in reading order instead of reading the ramp; tone still decides which cells are drawn.",
+      label: "Phrase",
+      performanceReason:
+        "A phrase is one character lookup per drawn cell.",
+      performanceRole: "responsiveness",
+      target: "glyph.phrase",
+      textValueKind: "single-line",
+      type: "text",
+    },
+    sizing: {
+      applicability: whenGlyphShape,
+      defaultValue: "fixed",
+      description:
+        "Fixed sets every character at one type size so tone picks the character, the way a terminal does. Tone scales each character with its ink.",
+      label: "Sizing",
+      options: [
+        { label: "Fixed", value: "fixed" },
+        { label: "Tone", value: "tone" },
+      ],
+      performanceReason:
+        "Sizing changes each glyph's font size, not the glyph count.",
+      performanceRole: "responsiveness",
+      target: "glyph.sizing",
+      type: "segmented",
+    },
+    face: {
+      applicability: whenGlyphShape,
+      defaultValue: "mono",
+      label: "Face",
+      options: [
+        { label: "Mono", value: "mono" },
+        { label: "Sans", value: "sans" },
+        { label: "Serif", value: "serif" },
+      ],
+      performanceReason:
+        "Face swaps the font family of the same glyph count.",
+      performanceRole: "responsiveness",
+      target: "glyph.face",
+      type: "segmented",
+    },
+    bold: {
+      applicability: whenGlyphShape,
+      defaultValue: true,
+      label: "Bold",
+      performanceReason:
+        "Weight swaps the font of the same glyph count.",
+      performanceRole: "responsiveness",
+      target: "glyph.bold",
+      type: "switch",
+    },
     scale: {
       applicability: { mode: "always" },
       defaultValue: 100,
@@ -314,6 +387,22 @@ export const unitSection: ToolcraftControlSectionSchema = {
       performanceRole: "responsiveness",
       sliderValueKind: "continuous",
       target: "unit.floor",
+      type: "slider",
+      unit: "%",
+    },
+    knockout: {
+      applicability: { mode: "always" },
+      defaultValue: 0,
+      description:
+        "Boxes a share of the bright cells, in short runs, as solid boxes with the mark cut out, so they read as highlighted characters.",
+      label: "Knockout",
+      max: 100,
+      min: 0,
+      performanceReason:
+        "Knockout swaps how existing units are drawn, not how many.",
+      performanceRole: "responsiveness",
+      sliderValueKind: "continuous",
+      target: "unit.knockout",
       type: "slider",
       unit: "%",
     },

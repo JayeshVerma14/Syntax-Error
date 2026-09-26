@@ -1,13 +1,12 @@
 /**
- * Local section commands. These edit the painted layer or the ink list; the
- * runtime owns every artifact action.
+ * Local section commands: reordering the ink list and applying the terminal
+ * look. The runtime owns every artifact action.
  */
 
 import type { ToolcraftPanelActionContext } from "@/toolcraft/runtime/react";
 
-import { fillPattern, readEditLayer, remapLayer } from "./engine-edit";
-import { resolveGridShape } from "./engine-render";
-import { engineTargets, readEngineSettings } from "./engine-settings";
+import { DEFAULT_GLYPHS } from "./engine-constants";
+import { engineTargets } from "./engine-settings";
 
 /** Deterministic Fisher-Yates over a drawn seed, so history stays sane. */
 function shuffled(inks: readonly string[]): string[] {
@@ -18,6 +17,33 @@ function shuffled(inks: readonly string[]): string[] {
   }
   return next;
 }
+
+/**
+ * The glyph-film look in one step: white monospaced characters set on a
+ * character grid over saturated blue, the brightest boxed, and a quiet
+ * field of dots and dashes held clear of the subject.
+ */
+export const TERMINAL_LOOK: Readonly<Record<string, unknown>> = {
+  [engineTargets.background]: "#0C18F8",
+  [engineTargets.includeBackground]: true,
+  [engineTargets.paletteMode]: "inks",
+  [engineTargets.inks]: ["#FFFFFF"],
+  [engineTargets.colorMatch]: "tone",
+  [engineTargets.shape]: "glyph",
+  [engineTargets.layout]: "type",
+  [engineTargets.cell]: 20,
+  [engineTargets.gap]: 0,
+  [engineTargets.glyphs]: [...DEFAULT_GLYPHS],
+  [engineTargets.ramp]: true,
+  [engineTargets.glyphSizing]: "fixed",
+  [engineTargets.glyphFace]: "mono",
+  [engineTargets.glyphBold]: true,
+  [engineTargets.knockout]: 8,
+  [engineTargets.backdropOn]: true,
+  [engineTargets.backdropDensity]: 80,
+  [engineTargets.backdropClearance]: 2,
+  [engineTargets.backdropOpacity]: 70,
+};
 
 export function handleSyntaxErrorPanelAction(
   context: ToolcraftPanelActionContext,
@@ -40,43 +66,8 @@ export function handleSyntaxErrorPanelAction(
     return;
   }
 
-  if (action === "palette.remap") {
-    const settings = readEngineSettings(values);
-    const layer = readEditLayer(values[engineTargets.editCells]);
-    if (Object.keys(layer).length === 0 || settings.inks.length === 0) return;
-    context.dispatch({
-      target: engineTargets.editCells,
-      type: "controls.setValue",
-      value: remapLayer(layer, settings.inks),
-    });
-    return;
-  }
-
-  if (action === "pattern.fill") {
-    const settings = readEngineSettings(values);
-    const size = context.state.canvas.size;
-    const shape = resolveGridShape(settings, size.width, size.height);
-    context.dispatch({
-      target: engineTargets.editCells,
-      type: "controls.setValue",
-      value: fillPattern({
-        angleDegrees: settings.patternAngle,
-        cols: shape.cols,
-        inks: settings.inks,
-        kind: settings.patternKind,
-        layer: settings.edit,
-        rows: shape.rows,
-        scale: settings.patternScale,
-      }),
-    });
-    return;
-  }
-
-  if (action === "pattern.clear") {
-    context.dispatch({
-      target: engineTargets.editCells,
-      type: "controls.setValue",
-      value: {},
-    });
+  if (action === "glyph.terminal") {
+    // One apply is one undoable step for the whole look.
+    context.dispatch({ type: "controls.apply", values: { ...TERMINAL_LOOK } });
   }
 }

@@ -4,7 +4,6 @@ import * as React from "react";
 
 import type { ToolcraftMediaAsset, ToolcraftState } from "@/toolcraft/runtime";
 import {
-  useToolcraftDispatch,
   useToolcraftEvaluatedValues,
   useToolcraftMediaPresentationUrls,
   useToolcraftProductSceneFrame,
@@ -12,8 +11,7 @@ import {
   useToolcraftViewportInteractionActive,
 } from "@/toolcraft/runtime/react";
 
-import { unprojectPoint } from "./engine-camera";
-import { applyStroke, cellLine, type EditLayer } from "./engine-edit";
+import { isFontReady, waitForFont } from "./engine-fonts";
 import { registerFootage, seekFootage } from "./engine-footage";
 import { findSourceAsset, peekSourceRaster } from "./engine-grid";
 import {
@@ -21,15 +19,17 @@ import {
   renderSyntaxErrorFrame,
   resolveGridShape,
 } from "./engine-render";
-import { engineTargets, readEngineSettings } from "./engine-settings";
+import {
+  engineTargets,
+  readEngineSettings,
+  type TypeSettings,
+} from "./engine-settings";
 import {
   gridFromRaster,
-  isWordmarkFontReady,
   loadStillSource,
   releaseSources,
   type SourceGrid,
   type SourceRaster,
-  waitForWordmarkFont,
 } from "./engine-source";
 import styles from "./product-canvas.module.css";
 
@@ -37,8 +37,6 @@ type TimelineSlice = Readonly<{
   currentTimeSeconds: number;
   durationSeconds: number;
 }>;
-
-type Cell = readonly [number, number];
 
 /** How long the preview keeps waiting for a chosen typeface to load. */
 const FONT_WAIT_MS = 15_000;
@@ -72,10 +70,37 @@ function timelineEqual(previous: TimelineSlice, next: TimelineSlice): boolean {
   );
 }
 
+/**
+ * Redraws once a picked typeface arrives. A font picker loads its selected
+ * font after the first frame has already drawn with the fallback, so the
+ * sheet would otherwise keep the fallback until something else changed.
+ */
+function useFontArrival(
+  type: TypeSettings,
+  inUse: boolean,
+  onArrive: () => void,
+): void {
+  // The latest callback and face are read through a ref; the effect re-runs
+  // only when the requested face itself changes, not on every layout edit.
+  const latest = React.useRef({ onArrive, type });
+  latest.current = { onArrive, type };
+  const faceKey = `${type.fontId}|${type.fontWeight}`;
+  React.useEffect(() => {
+    const face = latest.current.type;
+    if (!inUse || faceKey.length === 0 || isFontReady(face)) return;
+    let active = true;
+    void waitForFont(face, FONT_WAIT_MS, () => active).then((ready) => {
+      if (active && ready) latest.current.onArrive();
+    });
+    return () => {
+      active = false;
+    };
+  }, [faceKey, inUse]);
+}
+
 export function ProductCanvas(): React.JSX.Element {
   const frame = useToolcraftProductSceneFrame();
   const values = useToolcraftEvaluatedValues();
-  const dispatch = useToolcraftDispatch();
   const mediaAssets = useToolcraftSelector(selectMediaAssets, mediaAssetsEqual);
   const presentationUrls = useToolcraftMediaPresentationUrls(mediaAssets);
   const timeline = useToolcraftSelector(selectTimeline, timelineEqual);
@@ -90,11 +115,8 @@ export function ProductCanvas(): React.JSX.Element {
     raster: SourceRaster;
     rows: number;
   } | null>(null);
-  // Transient stroke state: committed to runtime once, on pointer release.
-  const strokeRef = React.useRef<{ layer: EditLayer; points: Cell[] } | null>(null);
-  const lastCellRef = React.useRef<Cell | null>(null);
   const [sourceRevision, setSourceRevision] = React.useState(0);
-  const [strokeRevision, setStrokeRevision] = React.useState(0);
+  const [fontRevision, setFontRevision] = React.useState(0);
 
   const settings = React.useMemo(() => readEngineSettings(values), [values]);
   const sourceTarget = React.useMemo(
@@ -144,22 +166,15 @@ export function ProductCanvas(): React.JSX.Element {
     };
   }, [settings.sourceKind, sourceAsset, sourceUrl]);
 
-  // A newly chosen typeface finishes loading after the wordmark first
-  // rasterizes; redraw once it lands so the sheet never keeps the fallback.
-  React.useEffect(() => {
-    if (settings.sourceKind !== "text" || isWordmarkFontReady(settings.type)) {
-      return;
-    }
-    let active = true;
-    void waitForWordmarkFont(settings.type, FONT_WAIT_MS, () => active).then(
-      (ready) => {
-        if (active && ready) setSourceRevision((revision) => revision + 1);
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, [settings.sourceKind, settings.type]);
+  // The wordmark re-rasterizes when its face lands; the caption only redraws.
+  useFontArrival(settings.type, settings.sourceKind === "text", () =>
+    setSourceRevision((revision) => revision + 1),
+  );
+  useFontArrival(
+    settings.caption.type,
+    settings.caption.enabled && settings.caption.text.trim().length > 0,
+    () => setFontRevision((revision) => revision + 1),
+  );
 
   const liveProgress =
     timeline.durationSeconds > 0
@@ -234,109 +249,6 @@ export function ProductCanvas(): React.JSX.Element {
     return grid;
   };
 
-  /** Canvas pixel position → grid cell. */
-  const cellAt = React.useCallback(
-    (event: React.PointerEvent<HTMLCanvasElement>): Cell | null => {
-      const canvas = canvasRef.current;
-      if (!canvas || width < 1 || height < 1) return null;
-      const bounds = canvas.getBoundingClientRect();
-      if (bounds.width <= 0 || bounds.height <= 0) return null;
-      const shape = resolveGridShape(settings, width, height);
-      const frameX = ((event.clientX - bounds.left) / bounds.width) * width;
-      const frameY = ((event.clientY - bounds.top) / bounds.height) * height;
-      // In 3D view the pointer is cast onto the tilted sheet, so a stroke lands
-      // on the cell the user sees rather than the one under the flat grid.
-      const plane = unprojectPoint(settings.camera, width, height, frameX, frameY);
-      if (!plane) return null;
-      const column = Math.floor((plane.x / width) * shape.cols);
-      const row = Math.floor((plane.y / height) * shape.rows);
-      if (column < 0 || row < 0 || column >= shape.cols || row >= shape.rows) {
-        return null;
-      }
-      return [column, row];
-    },
-    [height, settings, width],
-  );
-
-  const paint = React.useCallback(
-    (points: readonly Cell[]) => {
-      const shape = resolveGridShape(settings, width, height);
-      const current = strokeRef.current;
-      if (!current) return;
-      current.points.push(...points);
-      current.layer = applyStroke({
-        color: settings.drawColor,
-        cols: shape.cols,
-        erase: settings.brush === "erase",
-        layer: current.layer,
-        points,
-        rows: shape.rows,
-        size: settings.brushSize,
-      });
-      setStrokeRevision((revision) => revision + 1);
-    },
-    [height, settings, width],
-  );
-
-  const onPointerDown = React.useCallback(
-    (event: React.PointerEvent<HTMLCanvasElement>) => {
-      // Space-drag belongs to canvas panning, and modified presses stay unclaimed.
-      if (event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey) {
-        return;
-      }
-      const cell = cellAt(event);
-      if (!cell) return;
-      event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      strokeRef.current = { layer: settings.edit, points: [] };
-
-      const previous = lastCellRef.current;
-      // Shift extends from the last painted cell, matching the reference's
-      // straight-line shortcut.
-      const points =
-        event.shiftKey && previous
-          ? cellLine(previous[0], previous[1], cell[0], cell[1])
-          : [cell];
-      paint(points);
-      lastCellRef.current = cell;
-    },
-    [cellAt, paint, settings.edit],
-  );
-
-  const onPointerMove = React.useCallback(
-    (event: React.PointerEvent<HTMLCanvasElement>) => {
-      if (!strokeRef.current) return;
-      const cell = cellAt(event);
-      if (!cell) return;
-      const previous = lastCellRef.current;
-      const points =
-        previous && (previous[0] !== cell[0] || previous[1] !== cell[1])
-          ? cellLine(previous[0], previous[1], cell[0], cell[1])
-          : [cell];
-      paint(points);
-      lastCellRef.current = cell;
-    },
-    [cellAt, paint],
-  );
-
-  // Recreated per render rather than memoized: it only runs on release, and
-  // the runtime dispatch it closes over is stable.
-  const endStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const stroke = strokeRef.current;
-    strokeRef.current = null;
-    if (!stroke || stroke.points.length === 0) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    // One stroke is one undoable command.
-    dispatch({
-      target: engineTargets.editCells,
-      type: "controls.setValue",
-      value: stroke.layer,
-    });
-    setStrokeRevision((revision) => revision + 1);
-  };
-
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || width < 1 || height < 1) return;
@@ -354,30 +266,25 @@ export function ProductCanvas(): React.JSX.Element {
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.scale(backingWidth / width, backingHeight / height);
 
-    // An in-progress stroke previews from transient state; the committed value
-    // is identical once the pointer releases.
-    const live = strokeRef.current;
-    const drawSettings = live ? { ...settings, edit: live.layer } : settings;
-
     renderSyntaxErrorFrame({
       context,
       frame: { height, width, x: 0, y: 0 },
       grid: currentGrid(),
       progress: loopProgress,
-      settings: drawSettings,
+      settings,
     });
     renderEditorOverlays({
       context,
       frame: { height, width, x: 0, y: 0 },
-      settings: drawSettings,
+      settings,
     });
   }, [
+    fontRevision,
     height,
     loopProgress,
     renderScale,
     samplingKey,
     settings,
-    strokeRevision,
     width,
   ]);
 
@@ -386,13 +293,8 @@ export function ProductCanvas(): React.JSX.Element {
   return (
     <canvas
       className={styles.surface}
-      data-toolcraft-canvas-handle="cell-paint"
       data-toolcraft-product-output=""
       data-testid="syntax-error-output"
-      onPointerCancel={endStroke}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={endStroke}
       ref={canvasRef}
     />
   );

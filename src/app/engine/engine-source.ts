@@ -9,9 +9,8 @@
  * `engine-footage`, which owns the only media element.
  */
 
-import { getFontPickerFontById } from "@/toolcraft/ui";
-
 import { MAX_CELLS_PER_AXIS, MIN_CELL_PX } from "./engine-constants";
+import { applyTextCase, fontStackFor } from "./engine-fonts";
 import { releaseFootage } from "./engine-footage";
 import type { TypeSettings } from "./engine-settings";
 
@@ -234,63 +233,6 @@ export function rasterizeFootage(
   return toRaster(context, size.width, size.height);
 }
 
-/** The bundled interface face, so a wordmark still renders in Inter offline. */
-const BUNDLED_FAMILY = "Inter Variable";
-const FONT_PROBE_TEXT = "Syntax 0123 mwMW";
-const FONT_POLL_MS = 120;
-
-let fontProbe: OffscreenCanvasRenderingContext2D | null | undefined;
-
-/** The catalog family behind the Typeface picker's font id. */
-function wordmarkFamily(type: TypeSettings): string {
-  return getFontPickerFontById(type.fontId)?.family ?? "Inter";
-}
-
-/**
- * Whether the chosen family has loaded. The Typeface picker loads its selected
- * font; until that settles, text in the family measures exactly like its
- * fallback, so it is measured against two different generic fallbacks and a
- * loaded face differs from at least one.
- */
-export function isWordmarkFontReady(type: TypeSettings): boolean {
-  fontProbe ??= createBuffer(1, 1);
-  const probe = fontProbe;
-  if (!probe) return true;
-  const family = wordmarkFamily(type);
-  return ["monospace", "serif"].some((generic) => {
-    probe.font = `${type.fontWeight} 40px "${family}", ${generic}`;
-    const withFamily = probe.measureText(FONT_PROBE_TEXT).width;
-    probe.font = `${type.fontWeight} 40px ${generic}`;
-    return withFamily !== probe.measureText(FONT_PROBE_TEXT).width;
-  });
-}
-
-/** Resolves true once the family loads, or false when it has not by the deadline. */
-export function waitForWordmarkFont(
-  type: TypeSettings,
-  timeoutMs: number,
-  isActive: () => boolean = () => true,
-): Promise<boolean> {
-  const started = performance.now();
-  return new Promise((resolve) => {
-    const check = () => {
-      if (isWordmarkFontReady(type)) resolve(true);
-      else if (!isActive() || performance.now() - started > timeoutMs) resolve(false);
-      else setTimeout(check, FONT_POLL_MS);
-    };
-    check();
-  });
-}
-
-function applyTextCase(text: string, textCase: string): string {
-  if (textCase === "uppercase") return text.toUpperCase();
-  if (textCase === "lowercase") return text.toLowerCase();
-  if (textCase === "capitalize" || textCase === "titleCase") {
-    return text.replace(/\b\p{L}/gu, (character) => character.toUpperCase());
-  }
-  return text;
-}
-
 /**
  * Rasterizes the wordmark at sampling resolution. Typography color and opacity
  * are real tone here: a dimmer wordmark reads as less tone and draws fewer
@@ -318,7 +260,7 @@ export function rasterizeWordmark(
 
   const lines = content.split(/\r?\n/);
   let fontSize = type.fontSize;
-  const family = `"${wordmarkFamily(type)}", "${BUNDLED_FAMILY}", system-ui, sans-serif`;
+  const family = fontStackFor(type);
   const applyFont = () => {
     context.font = `${type.fontWeight} ${fontSize}px ${family}`;
     context.letterSpacing = `${(type.letterSpacing * fontSize).toFixed(2)}px`;

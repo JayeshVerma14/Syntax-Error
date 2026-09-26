@@ -2,25 +2,41 @@ export const LOOP_SECONDS = 4;
 
 /**
  * Ordered faintest to densest so the ramp runs the same way as the ink list.
- * The default is the dense terminal ramp the reference layers use, rather than
- * a minimal five-step set, because a long ramp is what makes a character field
- * read as continuous tone.
+ * This is the character ramp of the reference glyph films: punctuation for
+ * the faintest tone, then arrows, brackets and letters, then the dense hash
+ * and money marks.
  */
 export const DEFAULT_GLYPHS: readonly string[] = [
   ".",
-  ",",
-  ":",
   "-",
+  ">",
+  ")",
+  "+",
+  "*",
+  "C",
+  "%",
+  "&",
+  "#",
+  "$",
+];
+
+/** The characters a knocked-out glyph box carries, as in the reference films. */
+export const BOX_GLYPHS: readonly string[] = ["0", "✦", "#", "0", "✦"];
+
+/** Characters a scramble draws from while text is decoding. */
+export const SCRAMBLE_GLYPHS: readonly string[] = [
+  "0",
+  "1",
+  ":",
+  ">",
+  "<",
+  "/",
   "=",
   "+",
   "*",
-  "c",
-  "o",
-  "%",
-  "&",
-  "$",
   "#",
-  "@",
+  "_",
+  "^",
 ];
 
 export const DEFAULT_INKS: readonly string[] = ["#141414", "#FF4500"];
@@ -47,9 +63,17 @@ export const SWATCHES: readonly string[] = [
 export const MARK_OPTIONS = [
   { label: "Circle", value: "circle" },
   { label: "Square", value: "square" },
+  { label: "Rounded", value: "rounded" },
   { label: "Octagon", value: "octagon" },
   { label: "Ring", value: "ring" },
+  { label: "Diamond", value: "diamond" },
   { label: "Bar", value: "bar" },
+  { label: "Dash", value: "dash" },
+  { label: "Plus", value: "plus" },
+  { label: "Cross", value: "cross" },
+  { label: "Star", value: "star" },
+  { label: "Checker", value: "checker" },
+  { label: "Seal", value: "seal" },
   { label: "Glyph", value: "glyph" },
 ] as const;
 
@@ -68,8 +92,10 @@ export type UnitShape = (typeof UNIT_SHAPE_OPTIONS)[number]["value"];
 export const RANDOM_SHAPES: readonly UnitMark[] = [
   "circle",
   "square",
+  "rounded",
   "octagon",
   "ring",
+  "diamond",
 ];
 
 /** Seeds the Mix set with the reference tool's combined circles-and-squares. */
@@ -84,7 +110,20 @@ export type ColorMatch = "blend" | "nearest" | "tone";
 /** Largest number of smeared blocks one glitch frame may place. */
 export const MAX_GLITCH_BLOCKS = 24;
 
-export type GridLayout = "columns" | "square";
+/**
+ * `type` lays the grid out as monospaced character cells, 0.6 of a line wide,
+ * the lattice a terminal draws text on.
+ */
+export type GridLayout = "columns" | "square" | "type";
+
+/** Width of a character cell relative to its height in the `type` layout. */
+export const TYPE_CELL_ASPECT = 0.6;
+
+/** Typeface families a glyph unit can be set in. */
+export type GlyphFace = "mono" | "sans" | "serif";
+
+/** How a glyph's size relates to tone: `fixed` keeps one type size, as text does. */
+export type GlyphSizing = "fixed" | "tone";
 
 export type DitherKind =
   | "bayer4"
@@ -99,10 +138,6 @@ export type DitherKind =
  * across the editable ink list, and `source` keeps each sampled pixel colour.
  */
 export type PaletteMode = "full" | "inks" | "source";
-
-export type PatternKind = "checker" | "dots" | "noise" | "ramp" | "stripe";
-
-export type BrushMode = "draw" | "erase";
 
 export const MOTION_STYLE_OPTIONS = [
   { label: "Still", value: "still" },
@@ -122,6 +157,11 @@ export const MOTION_STYLE_OPTIONS = [
   { label: "Decode", value: "decode" },
   { label: "Reveal", value: "reveal" },
   { label: "Shake", value: "shake" },
+  { label: "Dissolve", value: "dissolve" },
+  { label: "Grow", value: "grow" },
+  { label: "Resolve", value: "resolve" },
+  { label: "Flip", value: "flip" },
+  { label: "Scatter", value: "scatter" },
 ] as const;
 
 export type MotionStyle = (typeof MOTION_STYLE_OPTIONS)[number]["value"];
@@ -129,8 +169,10 @@ export type MotionStyle = (typeof MOTION_STYLE_OPTIONS)[number]["value"];
 /** Styles that travel along a line, and therefore read the Direction control. */
 export const DIRECTIONAL_MOTION: readonly MotionStyle[] = [
   "decode",
+  "flip",
   "morph",
   "pulse",
+  "resolve",
   "reveal",
   "spin",
   "sweep",
@@ -148,8 +190,8 @@ export const MIN_CELL_PX = 2;
 /** Upper bound on sampled cells per axis, protecting the interactive budget. */
 export const MAX_CELLS_PER_AXIS = 1024;
 
-/** Largest square brush footprint, in cells per side. */
-export const MAX_BRUSH_CELLS = 16;
+/** Most particles the swirl layer may carry, keeping it a bounded add-on. */
+export const MAX_SWIRL_PARTICLES = 600;
 
-/** Marks a painted cell as deliberately empty rather than merely untouched. */
-export const ERASED = "-";
+/** Most rays one burst may throw. */
+export const MAX_BURST_RAYS = 32;
