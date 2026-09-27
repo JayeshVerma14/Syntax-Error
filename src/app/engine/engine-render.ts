@@ -29,7 +29,7 @@ import type { SourceGrid } from "./engine-source";
 import { quantizeGrid } from "./engine-quantize";
 import { collectSwirl } from "./engine-swirl";
 import { buildToneField } from "./engine-tone";
-import { drawKnockout, drawUnit, resolveShape } from "./engine-units";
+import { drawKnockout, drawUnit, type Paint2D, resolveShape } from "./engine-units";
 
 export type FrameRect = Readonly<{
   height: number;
@@ -81,7 +81,7 @@ function knockoutNoise(column: number, row: number): number {
 }
 
 export type RenderFrameInput = Readonly<{
-  context: CanvasRenderingContext2D;
+  context: Paint2D;
   frame: FrameRect;
   grid: SourceGrid | null;
   /** Forward loop progress in 0..1. Stills pass 0. */

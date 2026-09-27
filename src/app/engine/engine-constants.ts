@@ -195,3 +195,10 @@ export const MAX_SWIRL_PARTICLES = 600;
 
 /** Most rays one burst may throw. */
 export const MAX_BURST_RAYS = 32;
+
+/**
+ * Burst speed range, in percent. At 100 one burst plays across its whole
+ * slot of the loop; at 25 it lasts four slots, so at most four overlap.
+ */
+export const MIN_BURST_SPEED = 25;
+export const MAX_BURST_SPEED = 400;

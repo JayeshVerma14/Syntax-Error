@@ -2,7 +2,12 @@
 
 import type { ToolcraftControlSectionSchema } from "@/toolcraft/runtime";
 
-import { MAX_BURST_RAYS, MAX_SWIRL_PARTICLES } from "../engine/engine-constants";
+import {
+  MAX_BURST_RAYS,
+  MAX_BURST_SPEED,
+  MAX_SWIRL_PARTICLES,
+  MIN_BURST_SPEED,
+} from "../engine/engine-constants";
 import { whenBursting, whenCaptioned, whenSwirling } from "./schema-conditions";
 
 export const burstSection: ToolcraftControlSectionSchema = {
@@ -11,7 +16,7 @@ export const burstSection: ToolcraftControlSectionSchema = {
       applicability: { mode: "always" },
       defaultValue: false,
       description:
-        "Rays of characters shoot out from one point and fly off the sheet, each ray drawn in the stroke that matches its angle.",
+        "Characters explode out of one point: a flash, streaks in the stroke that matches their direction, sparks and a shock ring, flying off the sheet.",
       label: "Burst effect",
       performanceReason:
         "The burst draws at most the empty cells of the same grid.",
@@ -31,11 +36,12 @@ export const burstSection: ToolcraftControlSectionSchema = {
     rays: {
       applicability: whenBursting,
       defaultValue: 14,
+      description: "Streaks thrown out by each burst; sparks follow in proportion.",
       label: "Rays",
       max: MAX_BURST_RAYS,
       min: 3,
       performanceReason:
-        "Ray count is bounded by the grid; every cell tests one ray.",
+        "Rays and their sparks draw only into cells of the same grid.",
       performanceRole: "responsiveness",
       sliderValueKind: "discrete",
       step: 1,
@@ -85,6 +91,23 @@ export const burstSection: ToolcraftControlSectionSchema = {
       target: "burst.count",
       type: "slider",
       variant: "discrete",
+    },
+    speed: {
+      applicability: whenBursting,
+      defaultValue: 100,
+      description:
+        "How fast each burst plays out. Faster bursts finish early in their slot of the loop; slower ones overlap the next.",
+      label: "Speed",
+      max: MAX_BURST_SPEED,
+      min: MIN_BURST_SPEED,
+      performanceReason:
+        "At the slowest speed at most four bursts overlap, each drawn into the same grid.",
+      performanceRole: "responsiveness",
+      sliderValueKind: "continuous",
+      step: 5,
+      target: "burst.speed",
+      type: "slider",
+      unit: "%",
     },
   },
   id: "burst",

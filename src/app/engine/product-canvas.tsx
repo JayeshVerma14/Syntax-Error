@@ -12,7 +12,13 @@ import {
 } from "@/toolcraft/runtime/react";
 
 import { isFontReady, waitForFont } from "./engine-fonts";
-import { registerFootage, seekFootage } from "./engine-footage";
+import {
+  onFootageFrame,
+  pauseFootage,
+  playFootage,
+  registerFootage,
+  seekFootage,
+} from "./engine-footage";
 import { findSourceAsset, peekSourceRaster } from "./engine-grid";
 import {
   renderEditorOverlays,
@@ -32,10 +38,12 @@ import {
   type SourceRaster,
 } from "./engine-source";
 import styles from "./product-canvas.module.css";
+import { useKeyframeFocus } from "./use-keyframe-focus";
 
 type TimelineSlice = Readonly<{
   currentTimeSeconds: number;
   durationSeconds: number;
+  isPlaying: boolean;
 }>;
 
 /** How long the preview keeps waiting for a chosen typeface to load. */
@@ -60,13 +68,15 @@ function selectTimeline(state: ToolcraftState): TimelineSlice {
   return {
     currentTimeSeconds: state.timeline.currentTimeSeconds,
     durationSeconds: state.timeline.durationSeconds,
+    isPlaying: state.timeline.isPlaying,
   };
 }
 
 function timelineEqual(previous: TimelineSlice, next: TimelineSlice): boolean {
   return (
     previous.currentTimeSeconds === next.currentTimeSeconds &&
-    previous.durationSeconds === next.durationSeconds
+    previous.durationSeconds === next.durationSeconds &&
+    previous.isPlaying === next.isPlaying
   );
 }
 
@@ -99,6 +109,7 @@ function useFontArrival(
 }
 
 export function ProductCanvas(): React.JSX.Element {
+  useKeyframeFocus();
   const frame = useToolcraftProductSceneFrame();
   const values = useToolcraftEvaluatedValues();
   const mediaAssets = useToolcraftSelector(selectMediaAssets, mediaAssetsEqual);
@@ -191,20 +202,48 @@ export function ProductCanvas(): React.JSX.Element {
   if (!viewportActive) heldProgressRef.current = liveProgress;
   const loopProgress = viewportActive ? heldProgressRef.current : liveProgress;
 
-  // Footage follows the playhead so preview and exported frames agree.
+  // Footage follows the playhead so preview and exported frames agree. While
+  // the timeline plays (and no gesture holds the frame) the element decodes in
+  // real time and the sheet re-samples once per presented video frame; seeking
+  // per tick would force a keyframe decode on every animation frame.
+  const footagePlaying =
+    settings.sourceKind === "video" && timeline.isPlaying && !viewportActive;
+  const playheadSeconds = loopProgress * Math.max(timeline.durationSeconds, 0);
+  // Playback only re-syncs on drift, so starting it reads the playhead
+  // without re-subscribing on every tick.
+  const playheadRef = React.useRef(playheadSeconds);
+  playheadRef.current = playheadSeconds;
+
+  // Keyed on the URL as well: the element only exists once the asset's
+  // presentation URL has resolved and the decode effect above registered it.
   React.useEffect(() => {
-    if (settings.sourceKind !== "video" || !sourceAsset) return;
+    if (!footagePlaying || !sourceAsset || !sourceUrl) return;
+    playFootage(sourceAsset.id, playheadRef.current);
+    const unsubscribe = onFootageFrame(sourceAsset.id, () => {
+      setSourceRevision((revision) => revision + 1);
+    });
+    return () => {
+      unsubscribe();
+      pauseFootage(sourceAsset.id);
+    };
+  }, [footagePlaying, sourceAsset, sourceUrl]);
+
+  React.useEffect(() => {
+    if (!footagePlaying || !sourceAsset) return;
+    playFootage(sourceAsset.id, playheadSeconds);
+  }, [footagePlaying, playheadSeconds, sourceAsset]);
+
+  // Paused or scrubbing: park the element on the exact playhead frame.
+  React.useEffect(() => {
+    if (settings.sourceKind !== "video" || footagePlaying || !sourceAsset) return;
     let active = true;
-    void seekFootage(
-      sourceAsset.id,
-      loopProgress * Math.max(timeline.durationSeconds, 0),
-    ).then(() => {
+    void seekFootage(sourceAsset.id, playheadSeconds).then(() => {
       if (active) setSourceRevision((revision) => revision + 1);
     });
     return () => {
       active = false;
     };
-  }, [loopProgress, settings.sourceKind, sourceAsset, timeline.durationSeconds]);
+  }, [footagePlaying, playheadSeconds, settings.sourceKind, sourceAsset]);
 
   const rect = frame.kind === "ready" ? frame.rect : null;
   const width = rect?.width ?? 0;

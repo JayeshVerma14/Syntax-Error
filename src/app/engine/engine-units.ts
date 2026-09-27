@@ -16,6 +16,12 @@ import {
 } from "./engine-constants";
 
 /**
+ * The 2D contexts the sheet is drawn into: the preview canvas, and the
+ * detached layer an export composes before it lands on the artifact.
+ */
+export type Paint2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+/**
  * Resolves the Shape control into one concrete mark for a cell.
  *
  * `random` scatters the geometric marks; `mix` spreads the user's own set,
@@ -100,7 +106,7 @@ export type UnitDraw = Readonly<{
 }>;
 
 function octagonPath(
-  context: CanvasRenderingContext2D,
+  context: Paint2D,
   radius: number,
 ): void {
   context.beginPath();
@@ -115,7 +121,7 @@ function octagonPath(
 }
 
 function roundedPath(
-  context: CanvasRenderingContext2D,
+  context: Paint2D,
   half: number,
   radius: number,
 ): void {
@@ -131,7 +137,7 @@ function roundedPath(
 
 /** A centred bar of the given length and thickness at one angle. */
 function spoke(
-  context: CanvasRenderingContext2D,
+  context: Paint2D,
   length: number,
   thickness: number,
   angle: number,
@@ -147,7 +153,7 @@ function spoke(
  * Transforms are the caller's; this function owns only the geometry.
  */
 function fillMark(
-  context: CanvasRenderingContext2D,
+  context: Paint2D,
   shape: UnitMark,
   unit: UnitDraw,
   cell: number,
@@ -254,7 +260,7 @@ function fillMark(
  * only the mark itself.
  */
 export function drawUnit(
-  context: CanvasRenderingContext2D,
+  context: Paint2D,
   shape: UnitMark,
   unit: UnitDraw,
   cell: number,
@@ -275,7 +281,7 @@ export function drawUnit(
  * selected line of text does.
  */
 export function drawKnockout(
-  context: CanvasRenderingContext2D,
+  context: Paint2D,
   shape: UnitMark,
   unit: UnitDraw,
   cell: number,

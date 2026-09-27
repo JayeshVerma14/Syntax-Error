@@ -24,6 +24,38 @@ import { gridFromRaster } from "./engine-source";
 /** How long an export waits for a freshly chosen caption typeface. */
 const EXPORT_FONT_WAIT_MS = 3000;
 
+/**
+ * The export canvas already holds the runtime's background when the frame
+ * renderer runs, so marks cut out of their boxes (knockout, seal, the caption
+ * highlight) would cut through it and encode as holes. The sheet is drawn on
+ * its own transparent layer first, exactly as the preview draws above the
+ * background, and that layer is then laid over the artifact frame. The layer
+ * is kept across the frames of one export and released once exports go idle.
+ */
+const LAYER_IDLE_MS = 4000;
+let exportLayer: OffscreenCanvasRenderingContext2D | null = null;
+let layerRelease: ReturnType<typeof setTimeout> | null = null;
+
+function exportLayerFor(
+  width: number,
+  height: number,
+): OffscreenCanvasRenderingContext2D | null {
+  if (layerRelease !== null) clearTimeout(layerRelease);
+  layerRelease = setTimeout(() => {
+    exportLayer = null;
+    layerRelease = null;
+  }, LAYER_IDLE_MS);
+  if (
+    exportLayer &&
+    exportLayer.canvas.width === width &&
+    exportLayer.canvas.height === height
+  ) {
+    return exportLayer;
+  }
+  exportLayer = new OffscreenCanvas(width, height).getContext("2d");
+  return exportLayer;
+}
+
 type StateLike = Readonly<{
   canvas: Readonly<{ size: { height: number; width: number } }>;
   mediaAssets: readonly {
@@ -78,8 +110,17 @@ export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
       signal.throwIfAborted();
     }
 
+    const target = context.canvas;
+    const layer = exportLayerFor(target.width, target.height);
+    if (layer) {
+      const matrix = context.getTransform();
+      layer.setTransform(1, 0, 0, 1, 0, 0);
+      layer.clearRect(0, 0, target.width, target.height);
+      layer.setTransform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
+    }
     renderSyntaxErrorFrame({
-      context,
+      // Without a layer (allocation refused) the sheet draws straight on.
+      context: layer ?? context,
       frame: {
         height: frame.height,
         width: frame.width,
@@ -90,6 +131,12 @@ export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
       progress: readLoopProgress(state),
       settings,
     });
+    if (layer) {
+      context.save();
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.drawImage(layer.canvas, 0, 0);
+      context.restore();
+    }
   },
 };
 

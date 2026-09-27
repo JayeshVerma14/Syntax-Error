@@ -11,6 +11,7 @@
 import { SCRAMBLE_GLYPHS } from "./engine-constants";
 import { applyTextCase, fontStackFor } from "./engine-fonts";
 import type { CaptionSettings } from "./engine-settings";
+import type { Paint2D } from "./engine-units";
 
 /** Blinks and cursor flashes per loop; even counts keep the seam continuous. */
 const BLINKS_PER_LOOP = 8;
@@ -49,7 +50,7 @@ export function decodedCharacter(
 type Frame = Readonly<{ height: number; width: number }>;
 
 export function drawCaption(
-  context: CanvasRenderingContext2D,
+  context: Paint2D,
   frame: Frame,
   caption: CaptionSettings,
   progress: number,
