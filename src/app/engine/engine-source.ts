@@ -117,6 +117,33 @@ function createBuffer(
   return canvas.getContext("2d", { willReadFrequently: true });
 }
 
+let sharedBuffer: {
+  context: OffscreenCanvasRenderingContext2D;
+  height: number;
+  width: number;
+} | null = null;
+
+/**
+ * One reusable sampling surface. Every rasterizer clears it, draws, and reads
+ * it back synchronously, so sharing is safe and footage playback stops
+ * allocating a fresh canvas for every presented frame.
+ */
+function sampleBuffer(
+  width: number,
+  height: number,
+): OffscreenCanvasRenderingContext2D | null {
+  if (
+    sharedBuffer &&
+    sharedBuffer.width === width &&
+    sharedBuffer.height === height
+  ) {
+    return sharedBuffer.context;
+  }
+  const context = createBuffer(width, height);
+  sharedBuffer = context ? { context, height, width } : null;
+  return context;
+}
+
 /**
  * The decoded source at a fixed sampling resolution, independent of cell
  * size. Summed-area tables of premultiplied RGB let any grid resolution be
@@ -208,7 +235,7 @@ export function rasterizeDrawable(
   frameHeight: number,
 ): SourceRaster | null {
   const size = sampleSize(frameWidth, frameHeight);
-  const context = createBuffer(size.width, size.height);
+  const context = sampleBuffer(size.width, size.height);
   if (!context) return null;
   const rect = coverRect(drawable.width, drawable.height, size.width, size.height);
   context.clearRect(0, 0, size.width, size.height);
@@ -225,7 +252,7 @@ export function rasterizeFootage(
   const videoHeight = element.videoHeight;
   if (videoWidth <= 0 || videoHeight <= 0) return null;
   const size = sampleSize(frameWidth, frameHeight);
-  const context = createBuffer(size.width, size.height);
+  const context = sampleBuffer(size.width, size.height);
   if (!context) return null;
   const rect = coverRect(videoWidth, videoHeight, size.width, size.height);
   context.clearRect(0, 0, size.width, size.height);
@@ -245,7 +272,7 @@ export function rasterizeWordmark(
   frameHeight: number,
 ): SourceRaster | null {
   const size = sampleSize(frameWidth, frameHeight);
-  const context = createBuffer(size.width, size.height);
+  const context = sampleBuffer(size.width, size.height);
   if (!context) return null;
   context.clearRect(0, 0, size.width, size.height);
   const content = applyTextCase(text, type.textCase).trim();

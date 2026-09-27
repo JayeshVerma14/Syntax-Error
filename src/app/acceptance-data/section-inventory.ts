@@ -287,7 +287,7 @@ export const appControlSectionInventory = [
       {
         affectedTargets: [],
         reason:
-          "The burst switch decides whether the burst settings are usable; all five are explicit applicability dependents.",
+          "The burst switch decides whether the burst settings are usable; all six are explicit applicability dependents.",
         role: "branch",
         target: engineTargets.burstOn,
       },
@@ -312,6 +312,7 @@ export const appControlSectionInventory = [
       engineTargets.burstReach,
       engineTargets.burstThickness,
       engineTargets.burstCount,
+      engineTargets.burstSpeed,
     ],
     title: "Burst",
   },

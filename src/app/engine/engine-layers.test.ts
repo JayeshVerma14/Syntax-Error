@@ -90,10 +90,15 @@ describe("burst", () => {
     origin: { x: 0, y: 0 },
     rays: 14,
     reach: 90,
+    speed: 100,
     thickness: 1.2,
   };
+  const burstGlyphs = ["-", "\\", "|", "/", "*", "+", "o", ":", ".", "'", "`", ",", "@", "#", "%"];
+  const reach = (Math.hypot(grid.width, grid.height) * burst.reach) / 100;
+  const distanceFromOrigin = (cell: { column: number; row: number }) =>
+    Math.hypot((cell.column + 0.5) * grid.cellWidth - 540, (cell.row + 0.5) * grid.cellHeight - 540);
 
-  it("draws each ray in the character whose stroke follows it", () => {
+  it("draws each streak in the character whose stroke follows it", () => {
     const quarter = Math.PI / 4;
     expect([0, quarter, 2 * quarter, 3 * quarter, 4 * quarter, -quarter].map(strokeGlyph)).toEqual([
       "-",
@@ -105,25 +110,45 @@ describe("burst", () => {
     ]);
   });
 
-  it("starts and ends every burst empty, so the loop closes", () => {
+  it("starts every burst empty and returns to its first frame at the loop point at any speed", () => {
     for (const progress of [0, 0.5, 1]) {
       expect(collectBurst(burst, grid, progress, null)).toEqual([]);
     }
+    for (const speed of [25, 60, 100, 250, 400]) {
+      const settings = { ...burst, speed };
+      expect(collectBurst(settings, grid, 1, null)).toEqual(collectBurst(settings, grid, 0, null));
+    }
   });
 
-  it("throws rays of stroke characters mid-burst and keeps off occupied cells", () => {
+  it("explodes out of the origin: the streaks leave the centre almost at once", () => {
+    // Progress 0.2 over two bursts is 40% into the first one.
     const cells = collectBurst(burst, grid, 0.2, null);
     expect(cells.length).toBeGreaterThan(50);
-    for (const cell of cells) {
-      expect(["-", "\\", "|", "/", "*", "o", ":"]).toContain(cell.glyph);
-    }
+    for (const cell of cells) expect(burstGlyphs).toContain(cell.glyph);
+    // Only dust settles near the origin; every streak has flown clear of it.
+    const streaks = cells.filter((cell) => ["-", "\\", "|", "/"].includes(cell.glyph));
+    expect(streaks.length).toBeGreaterThan(10);
+    expect(Math.min(...streaks.map(distanceFromOrigin))).toBeGreaterThan(reach * 0.1);
+    // Just after firing, the flash fills the centre.
+    const flash = collectBurst(burst, grid, 0.03, null);
+    expect(flash.some((cell) => distanceFromOrigin(cell) < reach * 0.05)).toBe(true);
+  });
+
+  it("keeps off occupied cells and draws nothing when off", () => {
+    const cells = collectBurst(burst, grid, 0.2, null);
     const occupied = new Uint8Array(grid.cols * grid.rows);
     for (const cell of cells) occupied[cell.row * grid.cols + cell.column] = 1;
     expect(collectBurst(burst, grid, 0.2, occupied)).toEqual([]);
+    expect(collectBurst({ ...burst, enabled: false }, grid, 0.2, null)).toEqual([]);
   });
 
-  it("draws nothing when off", () => {
-    expect(collectBurst({ ...burst, enabled: false }, grid, 0.2, null)).toEqual([]);
+  it("finishes fast bursts early in their slot and overlaps slow ones", () => {
+    const fast = { ...burst, count: 1, speed: 400 };
+    expect(collectBurst(fast, grid, 0.05, null).length).toBeGreaterThan(20);
+    expect(collectBurst(fast, grid, 0.3, null)).toEqual([]);
+    // At a quarter speed the three previous bursts are still flying at the loop start.
+    const slow = { ...burst, count: 1, speed: 25 };
+    expect(collectBurst(slow, grid, 0, null).length).toBeGreaterThan(20);
   });
 });
 

@@ -38,6 +38,7 @@ export const engineTargets = {
   burstOrigin: "burst.origin",
   burstRays: "burst.rays",
   burstReach: "burst.reach",
+  burstSpeed: "burst.speed",
   burstThickness: "burst.thickness",
   cameraDistance: "camera.distance",
   cameraFov: "camera.fov",
@@ -162,6 +163,8 @@ export type BurstSettings = Readonly<{
   rays: number;
   /** Ray length as a share of the frame diagonal, in percent. */
   reach: number;
+  /** Percent; 100 plays one burst across its whole slot of the loop. */
+  speed: number;
   /** Ray width in cells. */
   thickness: number;
 }>;
@@ -438,6 +441,7 @@ export function readEngineSettings(values: Values): EngineSettings {
       origin: readVector(values, engineTargets.burstOrigin, { x: 0, y: 0.55 }),
       rays: readNumber(values, engineTargets.burstRays, 14),
       reach: readNumber(values, engineTargets.burstReach, 90),
+      speed: readNumber(values, engineTargets.burstSpeed, 100),
       thickness: readNumber(values, engineTargets.burstThickness, 1.2),
     },
     camera: {
