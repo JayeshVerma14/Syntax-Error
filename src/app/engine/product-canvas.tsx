@@ -39,6 +39,7 @@ import {
 } from "./engine-source";
 import styles from "./product-canvas.module.css";
 import { useKeyframeFocus } from "./use-keyframe-focus";
+import { useVideoQualityPreset } from "./use-video-quality-preset";
 
 type TimelineSlice = Readonly<{
   currentTimeSeconds: number;
@@ -110,6 +111,7 @@ function useFontArrival(
 
 export function ProductCanvas(): React.JSX.Element {
   useKeyframeFocus();
+  useVideoQualityPreset();
   const frame = useToolcraftProductSceneFrame();
   const values = useToolcraftEvaluatedValues();
   const mediaAssets = useToolcraftSelector(selectMediaAssets, mediaAssetsEqual);
