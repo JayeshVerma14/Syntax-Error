@@ -202,3 +202,9 @@ export const MAX_BURST_RAYS = 32;
  */
 export const MIN_BURST_SPEED = 25;
 export const MAX_BURST_SPEED = 400;
+
+/**
+ * Product-owned marker that the 4K video preset has been applied to this
+ * workspace, so a later choice of Current is kept.
+ */
+export const VIDEO_QUALITY_PRESET_TARGET = "output.videoQualityPreset";

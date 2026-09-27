@@ -8,7 +8,7 @@ import {
 
 import appDefaults from "./app-defaults.json" with { type: "json" };
 import { appIdentity } from "./app-identity";
-import { LOOP_SECONDS } from "./engine/engine-constants";
+import { LOOP_SECONDS, VIDEO_QUALITY_PRESET_TARGET } from "./engine/engine-constants";
 import {
   burstSection,
   captionSection,
@@ -44,7 +44,12 @@ export const appSchema = defineToolcraft({
       upload: true,
     },
     identity: appIdentity,
-    persistence: { storage: "localStorage" },
+    // The video quality preset marker is product-owned state rather than a
+    // control value, so it opts into persistence explicitly.
+    persistence: {
+      additionalValueTargets: [VIDEO_QUALITY_PRESET_TARGET],
+      storage: "localStorage",
+    },
     settingsTransfer: { enabled: "auto" },
     panels: {
       controls: {
