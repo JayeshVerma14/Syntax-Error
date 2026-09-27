@@ -1,7 +1,23 @@
 import type { ToolcraftVideoExportFormat } from "./artifact-export-settings";
 import { ToolcraftArtifactExportError } from "./export-error";
 
-export const TOOLCRAFT_MAX_VIDEO_ARTIFACT_BYTES = 96 * 1024 * 1024;
+/*
+ * Syntax Error override — high-quality video export.
+ *
+ * Stock Toolcraft targeted 0.05 bits per pixel per frame, clamped to
+ * 2–12 Mbps, and refused any file projected over 96 MB. Dense moving glyphs
+ * and hard-edged marks turn to blocks at those rates (a 1080 by 1080 export
+ * got 2 Mbps). This targets 0.25 bits per pixel, between 16 and 80 Mbps, and
+ * raises the ceiling to 512 MB. A long export that would exceed the ceiling
+ * is fitted under it by lowering the rate instead of failing.
+ */
+export const TOOLCRAFT_MAX_VIDEO_ARTIFACT_BYTES = 512 * 1024 * 1024;
+
+const VIDEO_BITS_PER_PIXEL = 0.25;
+const MIN_VIDEO_BITRATE = 16_000_000;
+const MAX_VIDEO_BITRATE = 80_000_000;
+/** Below this, a fitted export would look worse than refusing it. */
+const MIN_FITTED_VIDEO_BITRATE = 2_000_000;
 
 export type ToolcraftVideoCodec = "avc" | "vp8" | "vp9";
 
@@ -39,36 +55,48 @@ export function getToolcraftVideoExportBitrate(
   height: number,
 ): number {
   return Math.max(
-    2_000_000,
-    Math.min(12_000_000, Math.round(width * height * 30 * 0.05)),
+    MIN_VIDEO_BITRATE,
+    Math.min(MAX_VIDEO_BITRATE, Math.round(width * height * 30 * VIDEO_BITS_PER_PIXEL)),
   );
 }
 
-function assertArtifactBudget(bitrate: number, durationSeconds: number): void {
-  const projectedBytes = (bitrate * durationSeconds * 1.1) / 8;
-  if (projectedBytes > TOOLCRAFT_MAX_VIDEO_ARTIFACT_BYTES) {
+/** The quality target for one export, fitted under the artifact ceiling. */
+export function resolveToolcraftVideoTargetBitrate(
+  width: number,
+  height: number,
+  durationSeconds: number,
+): number {
+  const fitting = Math.floor(
+    (TOOLCRAFT_MAX_VIDEO_ARTIFACT_BYTES * 8) / (Math.max(durationSeconds, 1e-3) * 1.1),
+  );
+  const bitrate = Math.min(getToolcraftVideoExportBitrate(width, height), fitting);
+  if (bitrate < MIN_FITTED_VIDEO_BITRATE) {
     throw new ToolcraftArtifactExportError({
       code: "video-artifact-too-large",
       message: "The selected video export exceeds Toolcraft's artifact limit.",
     });
   }
+  return bitrate;
 }
 
 export function resolveToolcraftVideoEncodingPolicy({
+  bitrate,
   durationSeconds,
   height,
   requestedFormat,
   support,
   width,
 }: Readonly<{
+  /** A rate the encoder was probed at; defaults to the quality target. */
+  bitrate?: number;
   durationSeconds: number;
   height: number;
   requestedFormat: ToolcraftVideoExportFormat;
   support: ToolcraftVideoEncodingSupport;
   width: number;
 }>): ToolcraftVideoEncodingPolicy {
-  const bitrate = getToolcraftVideoExportBitrate(width, height);
-  assertArtifactBudget(bitrate, durationSeconds);
+  const chosenBitrate =
+    bitrate ?? resolveToolcraftVideoTargetBitrate(width, height, durationSeconds);
   const candidates =
     requestedFormat === "mp4"
       ? [mp4Candidate, ...webmCandidates]
@@ -82,5 +110,5 @@ export function resolveToolcraftVideoEncodingPolicy({
     });
   }
 
-  return Object.freeze({ ...candidate, bitrate });
+  return Object.freeze({ ...candidate, bitrate: chosenBitrate });
 }

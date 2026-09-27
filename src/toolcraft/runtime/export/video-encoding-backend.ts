@@ -3,6 +3,7 @@ import { ToolcraftArtifactExportError } from "./export-error";
 import {
   TOOLCRAFT_MAX_VIDEO_ARTIFACT_BYTES,
   resolveToolcraftVideoEncodingPolicy,
+  resolveToolcraftVideoTargetBitrate,
   type ToolcraftVideoCodec,
 } from "./video-encoding-policy";
 
@@ -38,17 +39,36 @@ export async function createToolcraftVideoEncoderBackend(
   const mediabunny = await import("mediabunny");
   request.signal.throwIfAborted();
   const codecs: readonly ToolcraftVideoCodec[] = ["avc", "vp9", "vp8"];
-  const supportResults = await Promise.all(
-    codecs.map((codec) =>
-      mediabunny.canEncodeVideo(codec, {
-        bitrate: 12_000_000,
-        height: request.height,
-        width: request.width,
-      }),
-    ),
+  // Syntax Error override — high-quality video export: probe at the quality
+  // target, and step the rate down only if the requested format's codec
+  // refuses it, so a very high rate never silently switches the container.
+  const targetBitrate = resolveToolcraftVideoTargetBitrate(
+    request.width,
+    request.height,
+    request.durationSeconds,
   );
-  request.signal.throwIfAborted();
+  const preferredCodec = request.requestedFormat === "mp4" ? 0 : 1;
+  const rates = [targetBitrate, 40_000_000, 24_000_000, 12_000_000].filter(
+    (rate, index) => index === 0 || rate < targetBitrate,
+  );
+  let bitrate = targetBitrate;
+  let supportResults: readonly boolean[] = [];
+  for (const rate of rates) {
+    bitrate = rate;
+    supportResults = await Promise.all(
+      codecs.map((codec) =>
+        mediabunny.canEncodeVideo(codec, {
+          bitrate: rate,
+          height: request.height,
+          width: request.width,
+        }),
+      ),
+    );
+    request.signal.throwIfAborted();
+    if (supportResults[preferredCodec] === true) break;
+  }
   const policy = resolveToolcraftVideoEncodingPolicy({
+    bitrate,
     durationSeconds: request.durationSeconds,
     height: request.height,
     requestedFormat: request.requestedFormat,
@@ -79,7 +99,10 @@ export async function createToolcraftVideoEncoderBackend(
     source = new mediabunny.CanvasSource(request.canvas, {
       bitrate: policy.bitrate,
       codec: policy.codec,
+      // Hard-edged marks and glyphs: ask the encoder to keep detail.
+      contentHint: "detail",
       keyFrameInterval: 2,
+      latencyMode: "quality",
     });
     output.addVideoTrack(source, { frameRate: 30 });
     await output.start();
