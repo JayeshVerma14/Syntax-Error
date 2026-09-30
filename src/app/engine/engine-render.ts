@@ -5,23 +5,37 @@
  *
  * The product draws a transparent foreground only; runtime owns background.
  * Layers stack in a fixed order: the backdrop field, the sampled subject, the
- * burst, the swirl, then the caption on top. Editor overlays (grid, circle
- * guide) are drawn separately by the preview and never enter an artifact.
+ * burst, the swirl, the caption, the end text, then the CRT pass on top. While
+ * the code roll is on screen it replaces all of them but the CRT pass. Editor
+ * overlays (grid, circle guide) are drawn separately by the preview and never
+ * enter an artifact.
  */
 
 import {
   BOX_GLYPHS,
+  LOOP_SECONDS,
   MAX_CELLS_PER_AXIS,
   MIN_CELL_PX,
   TYPE_CELL_ASPECT,
   type UnitMark,
 } from "./engine-constants";
+import type { AudioFrame } from "./engine-audio";
+import { reactToAudio } from "./engine-audio-react";
 import { dilateMask } from "./engine-backdrop";
 import { collectBurst } from "./engine-burst";
 import { createProjector } from "./engine-camera";
 import { drawCaption } from "./engine-caption";
+import {
+  codeSchedule,
+  codeTakesOver,
+  drawCodeRoll,
+  drawEndText,
+  sequenceTime,
+} from "./engine-code";
+import { drawCrt } from "./engine-crt";
+import { createFieldSampler } from "./engine-field";
 import { createGlitchPlan } from "./engine-glitch";
-import { backdropGlyph, backdropShown, glyphFont, pickGlyph } from "./engine-glyphs";
+import { glyphFont, pickGlyph } from "./engine-glyphs";
 import { createMotionField, sampleMotion } from "./engine-motion";
 import type { EngineSettings } from "./engine-settings";
 import { toGreyscale, unitColor, type PaletteChoice } from "./engine-palette";
@@ -82,11 +96,15 @@ function knockoutNoise(column: number, row: number): number {
 
 export type RenderFrameInput = Readonly<{
   context: Paint2D;
+  /** Timeline loop length; the code roll's phases are real seconds on it. */
+  durationSeconds?: number;
   frame: FrameRect;
   grid: SourceGrid | null;
   /** Forward loop progress in 0..1. Stills pass 0. */
   progress: number;
   settings: EngineSettings;
+  /** The music at this frame's song moment, when Audio reactive is on. */
+  sound?: AudioFrame;
 }>;
 
 type Mark = {
@@ -106,11 +124,43 @@ type Mark = {
 
 export function renderSyntaxErrorFrame({
   context,
+  durationSeconds = LOOP_SECONDS,
   frame,
   grid,
   progress,
   settings,
+  sound,
 }: RenderFrameInput): void {
+  // The music reshapes a few layer settings; everything else is unchanged.
+  const reaction = reactToAudio(settings, sound);
+  // The code roll and its end text run on sequence seconds. While the code is
+  // on screen it takes over the canvas and nothing of the sheet is built.
+  const schedule = codeSchedule(settings.code, settings.endText);
+  const sequence = sequenceTime(progress, durationSeconds, schedule.total);
+  const paintSequence = () => {
+    // A beat swells the text about the frame centre.
+    const swell = reaction.textScale;
+    if (swell !== 1) {
+      context.save();
+      context.translate(frame.width / 2, frame.height / 2);
+      context.scale(swell, swell);
+      context.translate(-frame.width / 2, -frame.height / 2);
+    }
+    drawCodeRoll(context, frame, settings.code, schedule, sequence);
+    drawEndText(context, frame, settings.endText, schedule, sequence);
+    if (swell !== 1) context.restore();
+  };
+  // The CRT pass lies over the finished picture, whatever is on screen.
+  const paintCrt = () => drawCrt(context, frame, reaction.crt, progress);
+  if (codeTakesOver(settings.code, schedule, sequence)) {
+    context.save();
+    context.translate(frame.x, frame.y);
+    paintSequence();
+    paintCrt();
+    context.restore();
+    return;
+  }
+
   const shape = resolveGridShape(settings, frame.width, frame.height);
   const cols = grid?.cols ?? shape.cols;
   const rows = grid?.rows ?? shape.rows;
@@ -120,7 +170,7 @@ export function renderSyntaxErrorFrame({
   const cellHeight = frame.height / rows;
   const gap = Math.min(0.95, settings.gap / 100);
   const floor = settings.unitFloor / 100;
-  const response = settings.scale / 100;
+  const response = (settings.scale / 100) * reaction.pump;
   const baseAngle = (settings.unitAngle * Math.PI) / 180;
   const jitter = settings.jitter / 100;
   const isColumns = settings.layout === "columns";
@@ -186,7 +236,7 @@ export function renderSyntaxErrorFrame({
     });
 
   const projector = createProjector(settings.camera, frame.width, frame.height);
-  const glitch = createGlitchPlan(settings.glitch, cols, rows, progress);
+  const glitch = createGlitchPlan(reaction.glitch, cols, rows, progress);
   const motionField = createMotionField(settings.motion, cols, rows);
   const field = grid ? buildToneField(grid, settings) : null;
   const occupied = new Uint8Array(cols * rows);
@@ -231,6 +281,7 @@ export function renderSyntaxErrorFrame({
       { cellHeight, cellWidth, cols, height: frame.height, rows, width: frame.width },
       progress,
       occupied,
+      reaction.burstEvents,
     )) {
       rays[cell.row * cols + cell.column] = 1;
       const mark = gridMark(cell.column, cell.row, "glyph", cell.glyph, layerGlyphSize);
@@ -240,18 +291,30 @@ export function renderSyntaxErrorFrame({
 
   const fillField = () => {
     const density = settings.backdrop.enabled
-      ? Math.min(1, Math.max(0, settings.backdrop.density / 100))
+      ? Math.min(1, Math.max(0, reaction.backdrop.density / 100))
       : 0;
     if (density <= 0) return;
     const clear = dilateMask(occupied, cols, rows, settings.backdrop.clearance);
     const dot = Math.min(cellWidth, cellHeight) * 0.16;
+    // The field moves; the clearance around the subject stays put.
+    const sampleField = createFieldSampler(
+      settings.backdrop.motion,
+      settings.backdrop.speed,
+      durationSeconds,
+      cols,
+      rows,
+      density,
+      progress,
+    );
     for (let row = 0; row < rows; row += 1) {
       for (let column = 0; column < cols; column += 1) {
         const cell = row * cols + column;
-        if (clear[cell] || rays[cell] || !backdropShown(column, row, density)) continue;
+        if (clear[cell] || rays[cell]) continue;
+        const pick = sampleField(column, row);
+        if (!pick) continue;
         const mark = glyphLayers
-          ? gridMark(column, row, "glyph", backdropGlyph(column, row), layerGlyphSize)
-          : gridMark(column, row, "circle", "", dot);
+          ? gridMark(column, row, "glyph", pick.glyph, layerGlyphSize)
+          : gridMark(column, row, "circle", "", dot * pick.scale);
         if (mark) backdrop.push(mark);
       }
     }
@@ -317,7 +380,7 @@ export function renderSyntaxErrorFrame({
   const paintSwirl = () => {
     const swirlSize = layerGlyphSize * 0.9;
     const swirlFont = glyphFont(swirlSize, glyphs.face, glyphs.bold);
-    for (const particle of collectSwirl(settings.swirl, frame.width, frame.height, progress)) {
+    for (const particle of collectSwirl(reaction.swirl, frame.width, frame.height, progress)) {
       drawUnit(
         context,
         "glyph",
@@ -447,7 +510,7 @@ export function renderSyntaxErrorFrame({
   context.textBaseline = "middle";
 
   if (backdrop.length > 0) {
-    context.globalAlpha = Math.min(1, Math.max(0, settings.backdrop.opacity / 100));
+    context.globalAlpha = Math.min(1, Math.max(0, reaction.backdrop.opacity / 100));
     paint(backdrop, 0, 0, null);
     context.globalAlpha = 1;
   }
@@ -459,6 +522,8 @@ export function renderSyntaxErrorFrame({
   paint(burst, 0, 0, null);
   paintSwirl();
   paintCaption();
+  paintSequence();
+  paintCrt();
   context.restore();
 }
 

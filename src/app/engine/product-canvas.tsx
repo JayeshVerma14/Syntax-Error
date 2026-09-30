@@ -11,6 +11,7 @@ import {
   useToolcraftViewportInteractionActive,
 } from "@/toolcraft/runtime/react";
 
+import { sampleAudio, songSecondsAt } from "./engine-audio";
 import { isFontReady, waitForFont } from "./engine-fonts";
 import {
   onFootageFrame,
@@ -38,7 +39,10 @@ import {
   type SourceRaster,
 } from "./engine-source";
 import styles from "./product-canvas.module.css";
+import { useAudioPlayback } from "./use-audio-playback";
+import { useCodeLoopSync } from "./use-code-loop-sync";
 import { useKeyframeFocus } from "./use-keyframe-focus";
+import { useSong } from "./use-song";
 import { useVideoQualityPreset } from "./use-video-quality-preset";
 
 type TimelineSlice = Readonly<{
@@ -112,6 +116,7 @@ function useFontArrival(
 export function ProductCanvas(): React.JSX.Element {
   useKeyframeFocus();
   useVideoQualityPreset();
+  useCodeLoopSync();
   const frame = useToolcraftProductSceneFrame();
   const values = useToolcraftEvaluatedValues();
   const mediaAssets = useToolcraftSelector(selectMediaAssets, mediaAssetsEqual);
@@ -188,6 +193,16 @@ export function ProductCanvas(): React.JSX.Element {
     settings.caption.enabled && settings.caption.text.trim().length > 0,
     () => setFontRevision((revision) => revision + 1),
   );
+  useFontArrival(
+    settings.code.type,
+    settings.code.enabled && settings.code.text.trim().length > 0,
+    () => setFontRevision((revision) => revision + 1),
+  );
+  useFontArrival(
+    settings.endText.type,
+    settings.endText.enabled && settings.endText.text.trim().length > 0,
+    () => setFontRevision((revision) => revision + 1),
+  );
 
   const liveProgress =
     timeline.durationSeconds > 0
@@ -246,6 +261,23 @@ export function ProductCanvas(): React.JSX.Element {
       active = false;
     };
   }, [footagePlaying, playheadSeconds, settings.sourceKind, sourceAsset]);
+
+  // The song follows the playhead the same way: its moment is Song start plus
+  // the timeline time, read from a once-computed analysis.
+  const song = useSong(mediaAssets, presentationUrls, settings.audio.enabled);
+  const songSeconds = songSecondsAt(settings.audio, playheadSeconds);
+  const heardSeconds = useAudioPlayback(
+    settings.audio.enabled ? song : null,
+    timeline.isPlaying,
+    songSeconds,
+    settings.audio.volume / 100,
+  );
+  // The music this frame reacts to: what is heard while playing, else the
+  // playhead's. Read on every render, which playback drives once per frame.
+  const sound =
+    song && settings.audio.enabled
+      ? sampleAudio(song.analysis, heardSeconds() ?? songSeconds, settings.audio.sensitivity)
+      : undefined;
 
   const rect = frame.kind === "ready" ? frame.rect : null;
   const width = rect?.width ?? 0;
@@ -309,10 +341,12 @@ export function ProductCanvas(): React.JSX.Element {
 
     renderSyntaxErrorFrame({
       context,
+      durationSeconds: timeline.durationSeconds,
       frame: { height, width, x: 0, y: 0 },
       grid: currentGrid(),
       progress: loopProgress,
       settings,
+      sound,
     });
     renderEditorOverlays({
       context,
@@ -323,9 +357,11 @@ export function ProductCanvas(): React.JSX.Element {
     fontRevision,
     height,
     loopProgress,
+    timeline.durationSeconds,
     renderScale,
     samplingKey,
     settings,
+    sound,
     width,
   ]);
 

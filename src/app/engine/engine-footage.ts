@@ -17,8 +17,15 @@ type FootageEntry = {
   element: HTMLVideoElement;
   /** When an exact-frame seek was last requested; live playback yields to it. */
   heldAt?: number;
-  /** In-flight seek: the newest requested target and everyone waiting on it. */
-  seek?: { resolvers: Array<(element: HTMLVideoElement) => void>; target: number };
+  /**
+   * In-flight seek: the target last handed to the element, the newest
+   * requested target, and everyone waiting on it.
+   */
+  seek?: {
+    issued: number;
+    resolvers: Array<(element: HTMLVideoElement) => void>;
+    target: number;
+  };
   url: string;
 };
 
@@ -127,11 +134,16 @@ export function seekFootage(
     }
 
     return new Promise<HTMLVideoElement>((resolve) => {
-      const seek = { resolvers: [resolve], target };
+      const seek = { issued: target, resolvers: [resolve], target };
       entry.seek = seek;
       const onSeeked = () => {
         // A newer target arrived mid-flight: chase it before settling anyone.
-        if (Math.abs(element.currentTime - seek.target) >= 1e-3) {
+        // This compares requests, not `currentTime`: the element may land
+        // somewhere other than the requested time (a clip whose first frame
+        // sits after 0 s reports that frame's time for a seek to 0), and
+        // chasing the reported time would re-seek forever and never settle.
+        if (seek.target !== seek.issued) {
+          seek.issued = seek.target;
           element.currentTime = seek.target;
           return;
         }

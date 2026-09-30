@@ -24,15 +24,38 @@ import {
   type UnitMark,
   type UnitShape,
 } from "./engine-constants";
+import { readAudio, type AudioSettings } from "./engine-audio";
 import type { CameraSettings } from "./engine-camera";
+import { readCrt, type CrtSettings } from "./engine-crt";
+import { FIELD_MOTIONS, type FieldMotion } from "./engine-field";
+import {
+  DEFAULT_CODE_BREAK_SECONDS,
+  DEFAULT_CODE_PAUSE_SECONDS,
+  DEFAULT_CODE_ROLL_SECONDS,
+  DEFAULT_CODE_TEXT,
+  DEFAULT_END_HOLD_SECONDS,
+  DEFAULT_END_TEXT,
+} from "./engine-code-text";
 import type { MotionSettings } from "./engine-motion";
+import {
+  readBoolean,
+  readHex,
+  readNumber,
+  readString,
+  readStringList,
+  readText,
+  readVector,
+  type Values,
+} from "./engine-values";
 
 export const engineTargets = {
   background: "appearance.background",
   backdropClearance: "field.clearance",
   backdropDensity: "field.density",
+  backdropMotion: "field.motion",
   backdropOn: "field.enabled",
   backdropOpacity: "field.opacity",
+  backdropSpeed: "field.speed",
   burstCount: "burst.count",
   burstOn: "burst.enabled",
   burstOrigin: "burst.origin",
@@ -56,11 +79,30 @@ export const engineTargets = {
   captionType: "caption.type",
   cell: "grid.cell",
   circleOverlay: "view.circleOverlay",
+  codeBreakStyle: "code.breakStyle",
+  codeBreakTime: "code.breakTime",
+  codeMotion: "code.motion",
+  codeOn: "code.enabled",
+  codeHold: "code.hold",
+  codeReveal: "code.reveal",
+  codeRollTime: "code.rollTime",
+  codeSheetAtEnd: "code.sheetAtEnd",
+  codeText: "code.text",
+  codeType: "code.type",
   colorDiffuse: "palette.diffuse",
   colorMatch: "palette.match",
   contrast: "tone.contrast",
   cutoff: "tone.cutoff",
   dither: "tone.dither",
+  endBlink: "endText.blink",
+  endCursor: "endText.cursor",
+  endHighlight: "endText.highlight",
+  endHold: "endText.hold",
+  endOn: "endText.enabled",
+  endPosition: "endText.position",
+  endReveal: "endText.reveal",
+  endText: "endText.text",
+  endType: "endText.type",
   gap: "grid.gap",
   glitchAmount: "glitch.amount",
   glitchBlocks: "glitch.blocks",
@@ -148,8 +190,12 @@ export type BackdropSettings = Readonly<{
   /** 0..100: share of empty cells that carry a backdrop mark. */
   density: number;
   enabled: boolean;
+  /** How the field moves across the loop. */
+  motion: FieldMotion;
   /** 0..100. */
   opacity: number;
+  /** 1..100: how fast the field moves, in real time. */
+  speed: number;
 }>;
 
 /** A point in the canonical vector domain: -1..1, screen axes. */
@@ -194,7 +240,49 @@ export type CaptionSettings = Readonly<{
   type: TypeSettings;
 }>;
 
+/** How the code text travels: a filling terminal, or a block rolling through. */
+export type CodeMotion = "down" | "terminal" | "up";
+
+/** How each line appears as it arrives. */
+export type CodeReveal = "decode" | "glitch" | "line" | "type";
+
+/** How the code breaks apart once it has held. */
+export type CodeBreakStyle = "burst" | "fall" | "glitch" | "swirl" | "vortex" | "wind";
+
+export const CODE_BREAK_STYLES: readonly CodeBreakStyle[] = [
+  "swirl",
+  "burst",
+  "vortex",
+  "fall",
+  "wind",
+  "glitch",
+];
+
+export type CodeRollSettings = Readonly<{
+  breakStyle: CodeBreakStyle;
+  /** Seconds the break takes, until the last character has gone. */
+  breakTime: number;
+  enabled: boolean;
+  motion: CodeMotion;
+  /** Seconds the arrived text holds still before it breaks. */
+  pause: number;
+  reveal: CodeReveal;
+  /** Seconds for the whole text to arrive. */
+  rollTime: number;
+  /** Whether the sheet returns once the code has broken away. */
+  sheetAtEnd: boolean;
+  text: string;
+  type: TypeSettings;
+}>;
+
+/** Caption-style closing text, shown for `hold` seconds after the code roll. */
+export type EndTextSettings = CaptionSettings &
+  Readonly<{
+    hold: number;
+  }>;
+
 export type EngineSettings = Readonly<{
+  audio: AudioSettings;
   backdrop: BackdropSettings;
   background: string;
   burst: BurstSettings;
@@ -202,11 +290,14 @@ export type EngineSettings = Readonly<{
   caption: CaptionSettings;
   cell: number;
   circleOverlay: boolean;
+  code: CodeRollSettings;
+  crt: CrtSettings;
   colorDiffuse: boolean;
   colorMatch: ColorMatch;
   contrast: number;
   cutoff: number;
   dither: DitherKind;
+  endText: EndTextSettings;
   gap: number;
   glitch: GlitchSettings;
   glyph: GlyphSettings;
@@ -238,8 +329,6 @@ export type EngineSettings = Readonly<{
   unitFloor: number;
 }>;
 
-type Values = Readonly<Record<string, unknown>>;
-
 const LETTER_SPACING_EM: Readonly<Record<string, number>> = {
   normal: 0,
   tight: -0.025,
@@ -259,74 +348,6 @@ const LINE_HEIGHT_SCALE: Readonly<Record<string, number>> = {
   spacious: 1.75,
   tight: 1.25,
 };
-
-function readNumber(values: Values, target: string, fallback: number): number {
-  const value = values[target];
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function readBoolean(
-  values: Values,
-  target: string,
-  fallback: boolean,
-): boolean {
-  const value = values[target];
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function readString<Value extends string>(
-  values: Values,
-  target: string,
-  allowed: readonly Value[],
-  fallback: Value,
-): Value {
-  const value = values[target];
-  return typeof value === "string" && (allowed as readonly string[]).includes(value)
-    ? (value as Value)
-    : fallback;
-}
-
-function readText(values: Values, target: string, fallback: string): string {
-  const value = values[target];
-  return typeof value === "string" ? value : fallback;
-}
-
-function readHex(values: Values, target: string, fallback: string): string {
-  const value = values[target];
-  return typeof value === "string" && /^#[0-9A-F]{6}$/i.test(value)
-    ? value.toUpperCase()
-    : fallback;
-}
-
-function readStringList(
-  values: Values,
-  target: string,
-  fallback: readonly string[],
-): readonly string[] {
-  const value = values[target];
-  if (!Array.isArray(value)) return fallback;
-  const entries = value.filter(
-    (entry): entry is string => typeof entry === "string" && entry.length > 0,
-  );
-  return entries.length > 0 ? entries : fallback;
-}
-
-function readVector(
-  values: Values,
-  target: string,
-  fallback: VectorPoint,
-): VectorPoint {
-  const value = values[target];
-  if (value === null || typeof value !== "object") return fallback;
-  const record = value as Record<string, unknown>;
-  const x = Number(record.x);
-  const y = Number(record.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return fallback;
-  return {
-    x: Math.min(1, Math.max(-1, x)),
-    y: Math.min(1, Math.max(-1, y)),
-  };
-}
 
 const MARKS: readonly string[] = MARK_OPTIONS.map((option) => option.value);
 const SHAPES: readonly UnitShape[] = UNIT_SHAPE_OPTIONS.map((option) => option.value);
@@ -426,13 +447,61 @@ const CAPTION_TYPE: TypeSettings = {
   textCase: "original",
 };
 
+const CODE_TYPE: TypeSettings = {
+  ...CAPTION_TYPE,
+  fontSize: 18,
+  fontWeight: "500",
+};
+
+/** A phase length in seconds, never negative. */
+function readSeconds(values: Values, target: string, fallback: number): number {
+  return Math.max(0, readNumber(values, target, fallback));
+}
+
+export function readCodeRoll(values: Values): CodeRollSettings {
+  return {
+    breakStyle: readString(values, engineTargets.codeBreakStyle, CODE_BREAK_STYLES, "swirl"),
+    breakTime: readSeconds(values, engineTargets.codeBreakTime, DEFAULT_CODE_BREAK_SECONDS),
+    enabled: readBoolean(values, engineTargets.codeOn, false),
+    motion: readString(values, engineTargets.codeMotion, ["down", "terminal", "up"], "terminal"),
+    pause: readSeconds(values, engineTargets.codeHold, DEFAULT_CODE_PAUSE_SECONDS),
+    reveal: readString(
+      values,
+      engineTargets.codeReveal,
+      ["decode", "glitch", "line", "type"],
+      "type",
+    ),
+    rollTime: readSeconds(values, engineTargets.codeRollTime, DEFAULT_CODE_ROLL_SECONDS),
+    sheetAtEnd: readBoolean(values, engineTargets.codeSheetAtEnd, false),
+    text: readText(values, engineTargets.codeText, DEFAULT_CODE_TEXT),
+    type: readTypeValue(values, engineTargets.codeType, CODE_TYPE),
+  };
+}
+
+export function readEndText(values: Values): EndTextSettings {
+  return {
+    blink: readBoolean(values, engineTargets.endBlink, true),
+    cursor: readBoolean(values, engineTargets.endCursor, false),
+    enabled: readBoolean(values, engineTargets.endOn, false),
+    highlight: readText(values, engineTargets.endHighlight, ""),
+    hold: readSeconds(values, engineTargets.endHold, DEFAULT_END_HOLD_SECONDS),
+    position: readVector(values, engineTargets.endPosition, { x: 0, y: 0 }),
+    reveal: readString(values, engineTargets.endReveal, ["decode", "static", "type"], "type"),
+    text: readText(values, engineTargets.endText, DEFAULT_END_TEXT),
+    type: readTypeValue(values, engineTargets.endType, CAPTION_TYPE),
+  };
+}
+
 export function readEngineSettings(values: Values): EngineSettings {
   return {
+    audio: readAudio(values),
     backdrop: {
       clearance: readNumber(values, engineTargets.backdropClearance, 2),
       density: readNumber(values, engineTargets.backdropDensity, 80),
       enabled: readBoolean(values, engineTargets.backdropOn, false),
+      motion: readString(values, engineTargets.backdropMotion, FIELD_MOTIONS, "still"),
       opacity: readNumber(values, engineTargets.backdropOpacity, 70),
+      speed: readNumber(values, engineTargets.backdropSpeed, 20),
     },
     background: readHex(values, engineTargets.background, "#F2F0ED"),
     burst: {
@@ -475,6 +544,8 @@ export function readEngineSettings(values: Values): EngineSettings {
     },
     cell: readNumber(values, engineTargets.cell, 24),
     circleOverlay: readBoolean(values, engineTargets.circleOverlay, false),
+    code: readCodeRoll(values),
+    crt: readCrt(values),
     colorDiffuse: readBoolean(values, engineTargets.colorDiffuse, false),
     colorMatch: readString(
       values,
@@ -490,6 +561,7 @@ export function readEngineSettings(values: Values): EngineSettings {
       ["bayer4", "bayer8", "blue", "floyd", "none", "threshold"],
       "none",
     ),
+    endText: readEndText(values),
     gap: readNumber(values, engineTargets.gap, 0),
     glitch: {
       amount: readNumber(values, engineTargets.glitchAmount, 40),

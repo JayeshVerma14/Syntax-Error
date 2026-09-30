@@ -58,17 +58,23 @@ export type BurstGrid = Readonly<{
   width: number;
 }>;
 
+/** One burst that has fired: its seed and how far through its life it is, 0..1. */
+export type BurstEvent = Readonly<{ age: number; seed: number }>;
+
 /**
  * Collects the grid cells the bursts cover at this loop phase. Cells the
- * subject already occupies are left to the subject.
+ * subject already occupies are left to the subject. Given `events`, those
+ * bursts are drawn instead of the loop's own schedule, whatever the switch,
+ * which is how the music fires a burst on each beat.
  */
 export function collectBurst(
   burst: BurstSettings,
   grid: BurstGrid,
   progress: number,
   occupied: Uint8Array | null,
+  events?: readonly BurstEvent[],
 ): BurstCell[] {
-  if (!burst.enabled || grid.cols <= 0 || grid.rows <= 0) return [];
+  if ((!burst.enabled && !events) || grid.cols <= 0 || grid.rows <= 0) return [];
   const rays = Math.max(1, Math.min(MAX_BURST_RAYS, Math.round(burst.rays)));
   const count = Math.max(1, Math.round(burst.count));
   const speed =
@@ -223,6 +229,13 @@ export function collectBurst(
   };
 
   // Newest first, so a fresh burst draws over the remains of older ones.
+  if (events) {
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index];
+      if (event.age >= 0 && event.age < 1) explode(event.seed, event.age);
+    }
+    return cells;
+  }
   for (let back = 0; back < alive; back += 1) {
     const start = newest - back;
     const age = (position - start) / span;

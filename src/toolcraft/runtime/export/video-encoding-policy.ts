@@ -10,12 +10,18 @@ import { ToolcraftArtifactExportError } from "./export-error";
  * got 2 Mbps). This targets 0.25 bits per pixel, between 16 and 80 Mbps, and
  * raises the ceiling to 512 MB. A long export that would exceed the ceiling
  * is fitted under it by lowering the rate instead of failing.
+ *
+ * WebM is the master-quality format: VP9 at 0.6 bits per pixel, up to
+ * 160 Mbps, with its alpha channel kept, so an export with Background off is
+ * a transparent video in the way a PNG export is a transparent image.
  */
 export const TOOLCRAFT_MAX_VIDEO_ARTIFACT_BYTES = 512 * 1024 * 1024;
 
 const VIDEO_BITS_PER_PIXEL = 0.25;
 const MIN_VIDEO_BITRATE = 16_000_000;
 const MAX_VIDEO_BITRATE = 80_000_000;
+const WEBM_BITS_PER_PIXEL = 0.6;
+const MAX_WEBM_BITRATE = 160_000_000;
 /** Below this, a fitted export would look worse than refusing it. */
 const MIN_FITTED_VIDEO_BITRATE = 2_000_000;
 
@@ -53,10 +59,16 @@ const webmCandidates: readonly ToolcraftVideoEncodingCandidate[] = Object.freeze
 export function getToolcraftVideoExportBitrate(
   width: number,
   height: number,
+  format: ToolcraftVideoExportFormat = "mp4",
 ): number {
+  const webm = format === "webm";
+  const bitsPerPixel = webm ? WEBM_BITS_PER_PIXEL : VIDEO_BITS_PER_PIXEL;
   return Math.max(
     MIN_VIDEO_BITRATE,
-    Math.min(MAX_VIDEO_BITRATE, Math.round(width * height * 30 * VIDEO_BITS_PER_PIXEL)),
+    Math.min(
+      webm ? MAX_WEBM_BITRATE : MAX_VIDEO_BITRATE,
+      Math.round(width * height * 30 * bitsPerPixel),
+    ),
   );
 }
 
@@ -65,11 +77,12 @@ export function resolveToolcraftVideoTargetBitrate(
   width: number,
   height: number,
   durationSeconds: number,
+  format: ToolcraftVideoExportFormat = "mp4",
 ): number {
   const fitting = Math.floor(
     (TOOLCRAFT_MAX_VIDEO_ARTIFACT_BYTES * 8) / (Math.max(durationSeconds, 1e-3) * 1.1),
   );
-  const bitrate = Math.min(getToolcraftVideoExportBitrate(width, height), fitting);
+  const bitrate = Math.min(getToolcraftVideoExportBitrate(width, height, format), fitting);
   if (bitrate < MIN_FITTED_VIDEO_BITRATE) {
     throw new ToolcraftArtifactExportError({
       code: "video-artifact-too-large",

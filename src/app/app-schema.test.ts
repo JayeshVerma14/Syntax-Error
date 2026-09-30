@@ -56,9 +56,13 @@ describe("appSchema", () => {
       "burst",
       "swirl",
       "caption",
+      "code",
+      "end-text",
       "camera",
       "glitch",
+      "crt",
       "motion",
+      "audio",
     ]);
   });
 

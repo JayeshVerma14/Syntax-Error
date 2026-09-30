@@ -2,6 +2,11 @@
 
 import type { ToolcraftControlSectionInventoryEntry } from "../acceptance/types";
 import { engineTargets } from "../engine/engine-settings";
+import {
+  audioInventory,
+  codeInventory,
+  crtInventory,
+} from "./section-inventory-effects";
 
 export const appControlSectionInventory = [
   {
@@ -161,7 +166,7 @@ export const appControlSectionInventory = [
       {
         affectedTargets: [],
         reason:
-          "The idle field switch decides whether the field settings are usable; all three are explicit applicability dependents.",
+          "The idle field switch decides whether the field settings are usable; all five are explicit applicability dependents.",
         role: "branch",
         target: engineTargets.backdropOn,
       },
@@ -171,14 +176,23 @@ export const appControlSectionInventory = [
         role: "parameter",
         target: engineTargets.backdropClearance,
       },
+      {
+        affectedTargets: [],
+        reason:
+          "Field motion decides whether Speed is usable; it is an explicit applicability dependent.",
+        role: "branch",
+        target: engineTargets.backdropMotion,
+      },
     ],
     groupingReason:
-      "One entity: the quiet field in the empty cells, its density, its margin from the subject and its strength. These reset together.",
+      "One entity: the quiet field in the empty cells, its density, its margin from the subject, how it moves and its strength. These reset together.",
     id: "field",
     targets: [
       engineTargets.backdropOn,
       engineTargets.backdropDensity,
       engineTargets.backdropClearance,
+      engineTargets.backdropMotion,
+      engineTargets.backdropSpeed,
       engineTargets.backdropOpacity,
     ],
     title: "Field",
@@ -388,6 +402,7 @@ export const appControlSectionInventory = [
     ],
     title: "Caption",
   },
+  ...codeInventory,
   {
     entity: "Camera",
     entityId: "camera",
@@ -451,6 +466,7 @@ export const appControlSectionInventory = [
     ],
     title: "Glitch",
   },
+  ...crtInventory,
   {
     entity: "Motion",
     entityId: "motion",
@@ -481,6 +497,7 @@ export const appControlSectionInventory = [
     ],
     title: "Motion",
   },
+  ...audioInventory,
   {
     entity: "Image export",
     entityId: "image-export",

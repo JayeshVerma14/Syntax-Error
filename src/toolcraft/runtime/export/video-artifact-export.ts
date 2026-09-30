@@ -1,4 +1,7 @@
-import { getToolcraftRuntimeBackgroundColor } from "../state/canvas-background-state";
+import {
+  getToolcraftRuntimeBackgroundColor,
+  isToolcraftRuntimeBackgroundEnabled,
+} from "../state/canvas-background-state";
 import {
   downloadToolcraftArtifact,
   type ToolcraftArtifactDownloadRequest,
@@ -77,8 +80,18 @@ export async function exportToolcraftVideoArtifact(
   try {
     canvas.width = size.width;
     canvas.height = size.height;
+    // Syntax Error override: the product may supply a soundtrack cut to the
+    // timeline, which the encoder muxes beside the frames.
+    const audio =
+      (await request.exportRenderer?.renderAudio?.({
+        durationSeconds,
+        signal: request.signal,
+        state: request.state,
+      })) ?? null;
+    request.signal.throwIfAborted();
     backend = await (request.backendFactory ??
       createToolcraftVideoEncoderBackend)({
+      audio,
       canvas,
       durationSeconds,
       height: size.height,
@@ -97,7 +110,10 @@ export async function exportToolcraftVideoArtifact(
         backgroundColor:
           getToolcraftRuntimeBackgroundColor(state) ?? "#000000",
         canvas,
-        includeBackground: true,
+        // Syntax Error override: WebM keeps alpha, so it honours the
+        // Background switch the way PNG export does; MP4 is always opaque.
+        includeBackground:
+          settings.format !== "webm" || isToolcraftRuntimeBackgroundEnabled(state),
         outputFrame,
         pixelRatio: size.pixelRatio,
         productFrame,
@@ -135,7 +151,10 @@ export async function exportToolcraftVideoArtifact(
     (request.downloadArtifact ?? downloadToolcraftArtifact)({
       blob,
       extension: backend.extension,
-      rawBaseFileName: request.exportRenderer?.baseFileName ?? "toolcraft-export",
+      rawBaseFileName:
+        request.exportRenderer?.resolveFileName?.(request.state) ??
+        request.exportRenderer?.baseFileName ??
+        "toolcraft-export",
     });
     request.reportProgress(1);
 

@@ -58,6 +58,15 @@ export const whenField = {
   mode: "conditional",
 } as const;
 
+/** Speed applies only while the field moves. */
+export const whenFieldMoving = {
+  all: [
+    { equals: true, target: "field.enabled" },
+    { notEquals: "still", target: "field.motion" },
+  ],
+  mode: "conditional",
+} as const;
+
 export const whenBursting = {
   all: [{ equals: true, target: "burst.enabled" }],
   mode: "conditional",
@@ -70,5 +79,25 @@ export const whenSwirling = {
 
 export const whenCaptioned = {
   all: [{ equals: true, target: "caption.enabled" }],
+  mode: "conditional",
+} as const;
+
+export const whenCodeRolling = {
+  all: [{ equals: true, target: "code.enabled" }],
+  mode: "conditional",
+} as const;
+
+export const whenEndText = {
+  all: [{ equals: true, target: "endText.enabled" }],
+  mode: "conditional",
+} as const;
+
+export const whenCrt = {
+  all: [{ equals: true, target: "crt.enabled" }],
+  mode: "conditional",
+} as const;
+
+export const whenAudio = {
+  all: [{ equals: true, target: "audio.enabled" }],
   mode: "conditional",
 } as const;

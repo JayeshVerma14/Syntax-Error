@@ -2,7 +2,7 @@
 
 import type { ToolcraftControlSectionSchema } from "@/toolcraft/runtime";
 
-import { whenField } from "./schema-conditions";
+import { whenField, whenFieldMoving } from "./schema-conditions";
 
 export const fieldSection: ToolcraftControlSectionSchema = {
   controls: {
@@ -10,7 +10,7 @@ export const fieldSection: ToolcraftControlSectionSchema = {
       applicability: { mode: "always" },
       defaultValue: false,
       description:
-        "Fills empty cells with a quiet field of dots, dashes and arrows, or small dots for shape units, held clear of the subject.",
+        "Fills empty cells with a quiet field of dots, dashes and arrows, or small dots for shape units, held clear of the subject. It can stay still or move.",
       label: "Idle field",
       performanceReason:
         "Field marks fill at most the empty cells of the same grid.",
@@ -49,6 +49,39 @@ export const fieldSection: ToolcraftControlSectionSchema = {
       target: "field.clearance",
       type: "slider",
       variant: "discrete",
+    },
+    motion: {
+      applicability: whenField,
+      defaultValue: "still",
+      description:
+        "Shimmer re-picks characters so the field boils; Drift marches it right a cell at a time; Rain drops it in columns; Wave sweeps a band of denser marks through it. The clearance around the subject stays put.",
+      label: "Motion",
+      options: [
+        { label: "Still", value: "still" },
+        { label: "Shimmer", value: "shimmer" },
+        { label: "Drift", value: "drift" },
+        { label: "Rain", value: "rain" },
+        { label: "Wave", value: "wave" },
+      ],
+      performanceReason: "Field motion changes which empty cells carry a mark, not how many cells exist.",
+      performanceRole: "responsiveness",
+      target: "field.motion",
+      type: "select",
+    },
+    speed: {
+      applicability: whenFieldMoving,
+      defaultValue: 20,
+      description:
+        "How fast the field moves, in real time; low values barely stir it. The loop still closes without a jump.",
+      label: "Speed",
+      max: 100,
+      min: 1,
+      performanceReason: "Speed changes how fast the same marks move.",
+      performanceRole: "responsiveness",
+      sliderValueKind: "continuous",
+      target: "field.speed",
+      type: "slider",
+      unit: "%",
     },
     opacity: {
       applicability: whenField,
