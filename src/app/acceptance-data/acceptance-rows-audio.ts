@@ -1,0 +1,142 @@
+/** Acceptance rows for audio reactivity. */
+
+import type { ToolcraftComponentAcceptance } from "../acceptance/types";
+import { audioTargets } from "../engine/engine-audio";
+import { controlBrowser, outputBrowser } from "./acceptance-browser";
+
+const songFixture = "terminal look with a song uploaded and Audio reactive on";
+
+export const audioAcceptance: readonly ToolcraftComponentAcceptance[] = [
+  {
+    automated: true,
+    automatedTestName: "declares the audio reactive switch",
+    browser: controlBrowser("browser: audio reactive makes the picture follow the song"),
+    componentType: "switch",
+    evidence: "timeline-output",
+    expectedObservable:
+      "Turning Audio reactive on with a song uploaded makes beats swell the picture and plays the song with the timeline, and reveals the audio settings; off makes the picture ignore the music.",
+    fixture: "terminal look with a song uploaded",
+    id: "audio.enabled",
+    kind: "control",
+    target: audioTargets.enabled,
+    userAction: "Turn Audio reactive on and play the loop, then turn it off.",
+  },
+  {
+    automated: true,
+    automatedTestName: "declares the music uploader",
+    browser: outputBrowser("browser: an uploaded song drives the picture and rides along in video"),
+    componentType: "fileDrop",
+    evidence: "media-lifecycle",
+    expectedObservable:
+      "An uploaded song is analysed once; playing the timeline plays it and the picture reacts to its beats and levels; removing it returns the picture to silence.",
+    fixture: "terminal look with Audio reactive on",
+    id: "audio.file",
+    kind: "control",
+    mediaLifecycleCoverage: ["upload", "remove", "reset"],
+    target: audioTargets.file,
+    userAction: "Upload an MP3, play the timeline, then remove it.",
+  },
+  {
+    automated: true,
+    automatedTestName: "declares the song start slider",
+    browser: controlBrowser("browser: song start picks the segment a clip covers"),
+    componentType: "slider",
+    evidence: "timeline-output",
+    expectedObservable:
+      "Moving Song start makes the clip react to, play and export a later part of the song, and the exported file name records the segment.",
+    fixture: songFixture,
+    id: "audio.start",
+    kind: "control",
+    target: audioTargets.start,
+    timelineCoverage: "keyframes",
+    userAction: "Set Song start to 30 and play the loop.",
+  },
+  {
+    automated: true,
+    automatedTestName: "declares the volume slider",
+    browser: controlBrowser("browser: volume sets the song's loudness"),
+    componentType: "slider",
+    evidence: "product-output",
+    expectedObservable:
+      "Lowering Volume makes the song quieter in the preview and in exported video; 0 mutes it without changing the reactions.",
+    fixture: songFixture,
+    id: "audio.volume",
+    kind: "control",
+    target: audioTargets.volume,
+    timelineCoverage: "keyframes",
+    userAction: "Lower Volume while the loop plays.",
+  },
+  {
+    automated: true,
+    automatedTestName: "declares the sensitivity slider",
+    browser: controlBrowser("browser: sensitivity scales every reaction"),
+    componentType: "slider",
+    evidence: "timeline-output",
+    expectedObservable:
+      "Raising Sensitivity makes quieter passages react as strongly as loud ones; lowering it calms every reaction.",
+    fixture: songFixture,
+    id: "audio.sensitivity",
+    kind: "control",
+    target: audioTargets.sensitivity,
+    timelineCoverage: "keyframes",
+    userAction: "Raise Sensitivity and play the loop.",
+  },
+  {
+    automated: true,
+    automatedTestName: "declares the beat pulse slider",
+    browser: controlBrowser("browser: beat pulse swells the picture on each beat"),
+    componentType: "slider",
+    evidence: "timeline-output",
+    expectedObservable:
+      "Raising Beat pulse makes each beat swell the units and the code and end text, brighten the idle field and flash the CRT band; 0 turns the pulse off.",
+    fixture: songFixture,
+    id: "audio.pulse",
+    kind: "control",
+    target: audioTargets.pulse,
+    timelineCoverage: "keyframes",
+    userAction: "Raise Beat pulse and play the loop.",
+  },
+  {
+    automated: true,
+    automatedTestName: "declares the level drive slider",
+    browser: controlBrowser("browser: level drive lets bass, mids and highs move layers"),
+    componentType: "slider",
+    evidence: "timeline-output",
+    expectedObservable:
+      "Raising Level drive lets bass swell the units and swirl, mids thicken the idle field and highs deepen the CRT scanlines.",
+    fixture: songFixture,
+    id: "audio.levels",
+    kind: "control",
+    target: audioTargets.levels,
+    timelineCoverage: "keyframes",
+    userAction: "Raise Level drive and play the loop.",
+  },
+  {
+    automated: true,
+    automatedTestName: "declares the burst on beats switch",
+    browser: controlBrowser("browser: burst on beats fires an explosion per beat"),
+    componentType: "switch",
+    evidence: "timeline-output",
+    expectedObservable:
+      "With Beat burst on, each strong beat fires the Burst section's explosion in place of its own timing.",
+    fixture: songFixture,
+    id: "audio.burstOnBeat",
+    kind: "control",
+    target: audioTargets.burstOnBeat,
+    userAction: "Turn Beat burst on and play the loop.",
+  },
+  {
+    automated: true,
+    automatedTestName: "declares the glitch on beats switch",
+    browser: controlBrowser("browser: glitch on beats tears the picture per beat"),
+    componentType: "switch",
+    evidence: "timeline-output",
+    expectedObservable:
+      "With Beat glitch on, the picture tears on each beat with a fresh pattern and stays clean between beats.",
+    fixture: songFixture,
+    id: "audio.glitchOnBeat",
+    kind: "control",
+    target: audioTargets.glitchOnBeat,
+    userAction: "Turn Beat glitch on and play the loop.",
+  },
+];

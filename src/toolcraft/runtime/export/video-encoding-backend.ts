@@ -20,6 +20,8 @@ export type ToolcraftVideoEncoderBackend = Readonly<{
 }>;
 
 export type ToolcraftVideoEncoderBackendFactoryRequest = Readonly<{
+  /** Syntax Error override: a soundtrack to mux beside the frames. */
+  audio?: AudioBuffer | null;
   canvas: HTMLCanvasElement;
   durationSeconds: number;
   height: number;
@@ -46,9 +48,10 @@ export async function createToolcraftVideoEncoderBackend(
     request.width,
     request.height,
     request.durationSeconds,
+    request.requestedFormat,
   );
   const preferredCodec = request.requestedFormat === "mp4" ? 0 : 1;
-  const rates = [targetBitrate, 40_000_000, 24_000_000, 12_000_000].filter(
+  const rates = [targetBitrate, 96_000_000, 64_000_000, 40_000_000, 24_000_000, 12_000_000].filter(
     (rate, index) => index === 0 || rate < targetBitrate,
   );
   let bitrate = targetBitrate;
@@ -99,14 +102,47 @@ export async function createToolcraftVideoEncoderBackend(
     source = new mediabunny.CanvasSource(request.canvas, {
       bitrate: policy.bitrate,
       codec: policy.codec,
+      // WebM keeps its alpha channel, so Background off exports a
+      // transparent video; MP4's codec has no alpha, so it is dropped there.
+      alpha: policy.mediaType === "video/webm" ? "keep" : "discard",
       // Hard-edged marks and glyphs: ask the encoder to keep detail.
       contentHint: "detail",
       keyFrameInterval: 2,
       latencyMode: "quality",
     });
     output.addVideoTrack(source, { frameRate: 30 });
+    // Syntax Error override: the soundtrack, in the first codec this
+    // container carries that the browser can encode (AAC or Opus in MP4,
+    // Opus in WebM).
+    let soundtrack: InstanceType<typeof mediabunny.AudioBufferSource> | null = null;
+    const audio = request.audio ?? null;
+    if (audio) {
+      const containerCodecs = format.getSupportedAudioCodecs();
+      let audioCodec: (typeof containerCodecs)[number] | null = null;
+      for (const candidate of ["aac", "opus"] as const) {
+        if (!containerCodecs.includes(candidate)) continue;
+        if (
+          await mediabunny.canEncodeAudio(candidate, {
+            bitrate: 192_000,
+            numberOfChannels: audio.numberOfChannels,
+            sampleRate: audio.sampleRate,
+          })
+        ) {
+          audioCodec = candidate;
+          break;
+        }
+      }
+      if (audioCodec) {
+        soundtrack = new mediabunny.AudioBufferSource({ bitrate: 192_000, codec: audioCodec });
+        output.addAudioTrack(soundtrack);
+      }
+    }
     await output.start();
     request.signal.throwIfAborted();
+    if (soundtrack && audio) {
+      await soundtrack.add(audio);
+      soundtrack.close();
+    }
   } catch (error) {
     try {
       // Output owns connected sources and can cancel even before start completed.

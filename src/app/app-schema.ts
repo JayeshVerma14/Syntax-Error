@@ -14,6 +14,9 @@ import {
   captionSection,
   swirlSection,
 } from "./schema/schema-sections-effects";
+import { audioSection } from "./schema/schema-sections-audio";
+import { codeRollSection, endTextSection } from "./schema/schema-sections-code";
+import { crtSection } from "./schema/schema-sections-crt";
 import { fieldSection } from "./schema/schema-sections-field";
 import { guidesSection } from "./schema/schema-sections-guides";
 import {
@@ -66,9 +69,13 @@ export const appSchema = defineToolcraft({
           burstSection,
           swirlSection,
           captionSection,
+          codeRollSection,
+          endTextSection,
           cameraSection,
           glitchSection,
+          crtSection,
           motionSection,
+          audioSection,
         ],
         title: "Controls",
       },

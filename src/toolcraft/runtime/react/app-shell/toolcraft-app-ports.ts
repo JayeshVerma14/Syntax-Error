@@ -87,7 +87,10 @@ function snapshotRasterRenderer(
     : Object.freeze({
         baseFileName: renderer.baseFileName,
         getContentBounds: renderer.getContentBounds,
+        // Syntax Error override: carry the soundtrack and file-name hooks.
+        renderAudio: renderer.renderAudio,
         renderFrame: renderer.renderFrame,
+        resolveFileName: renderer.resolveFileName,
       });
 }
 

@@ -3,6 +3,9 @@ import type {
   ToolcraftProductReadiness,
   ToolcraftTransferMode,
 } from "./acceptance/types";
+import { audioAcceptance } from "./acceptance-data/acceptance-rows-audio";
+import { codeAcceptance } from "./acceptance-data/acceptance-rows-code";
+import { crtAcceptance } from "./acceptance-data/acceptance-rows-crt";
 import { editingAcceptance } from "./acceptance-data/acceptance-rows-editing";
 import { layerAcceptance } from "./acceptance-data/acceptance-rows-layers";
 import { samplingAcceptance } from "./acceptance-data/acceptance-rows-sampling";
@@ -61,7 +64,10 @@ export const appAcceptance: readonly ToolcraftComponentAcceptance[] = [
   ...samplingAcceptance,
   ...editingAcceptance,
   ...layerAcceptance,
+  ...codeAcceptance,
   ...viewAcceptance,
+  ...crtAcceptance,
+  ...audioAcceptance,
 ];
 
 export { appControlSectionInventory } from "./acceptance-data/section-inventory";

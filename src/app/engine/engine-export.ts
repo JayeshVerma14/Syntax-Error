@@ -11,6 +11,15 @@ import {
   type ToolcraftSceneRect,
 } from "@/toolcraft/runtime";
 
+import {
+  audioTargets,
+  sampleAudio,
+  segmentFileSuffix,
+  songSecondsAt,
+  type AudioFrame,
+} from "./engine-audio";
+import { awaitSong, sliceSong } from "./engine-audio-io";
+import { LOOP_SECONDS } from "./engine-constants";
 import { waitForFont } from "./engine-fonts";
 import { findSourceAsset, resolveSourceRaster } from "./engine-grid";
 import { renderSyntaxErrorFrame, resolveGridShape } from "./engine-render";
@@ -88,8 +97,52 @@ function resolveAssetId(
   return findSourceAsset(state.mediaAssets, target)?.id ?? null;
 }
 
+/** The uploaded song's resource, while Audio reactive is on. */
+function resolveSongId(state: StateLike, settings: EngineSettings): string | null {
+  if (!settings.audio.enabled) return null;
+  return findSourceAsset(state.mediaAssets, audioTargets.file)?.id ?? null;
+}
+
+/** The music at an exported frame's song moment. */
+async function soundAt(
+  state: StateLike,
+  settings: EngineSettings,
+  timeSeconds: number,
+): Promise<AudioFrame | undefined> {
+  const songId = resolveSongId(state, settings);
+  const song = songId ? await awaitSong(songId) : null;
+  if (!song) return undefined;
+  return sampleAudio(
+    song.analysis,
+    songSecondsAt(settings.audio, timeSeconds),
+    settings.audio.sensitivity,
+  );
+}
+
+const BASE_FILE_NAME = "syntax-error";
+
 export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
-  baseFileName: "syntax-error",
+  baseFileName: BASE_FILE_NAME,
+  // The song segment a clip covers rides along in its video, so clips cut
+  // from one track line up again against it in an editor.
+  renderAudio: ({ durationSeconds, signal, state }) => {
+    const stateLike = state as unknown as StateLike;
+    const settings = readEngineSettings(stateLike.values);
+    const songId = resolveSongId(stateLike, settings);
+    const start = settings.audio.start;
+    const volume = settings.audio.volume / 100;
+    return (songId ? awaitSong(songId) : Promise.resolve(null)).then((song) => {
+      signal.throwIfAborted();
+      return song ? sliceSong(song, start, durationSeconds, volume) : null;
+    });
+  },
+  // A reactive clip is named after its song segment, so clips sort into order.
+  resolveFileName: (state) => {
+    const stateLike = state as unknown as StateLike;
+    const settings = readEngineSettings(stateLike.values);
+    if (!resolveSongId(stateLike, settings)) return BASE_FILE_NAME;
+    return `${BASE_FILE_NAME}${segmentFileSuffix(settings.audio, readLoopSeconds(state))}`;
+  },
   renderFrame: async ({ context, frame, signal, state, timeSeconds }) => {
     signal.throwIfAborted();
     const stateLike = state as unknown as StateLike;
@@ -104,10 +157,15 @@ export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
     signal.throwIfAborted();
     const shape = resolveGridShape(settings, frame.width, frame.height);
     const grid = raster ? gridFromRaster(raster, shape.cols, shape.rows) : null;
-    // Backdrop, burst, swirl and caption still draw without a sampled source.
-    if (settings.caption.enabled && settings.caption.text.trim().length > 0) {
-      await waitForFont(settings.caption.type, EXPORT_FONT_WAIT_MS);
-      signal.throwIfAborted();
+    const sound = await soundAt(stateLike, settings, timeSeconds);
+    signal.throwIfAborted();
+    // Backdrop, burst, swirl, caption and the code roll still draw without a
+    // sampled source; each text layer waits for its chosen face.
+    for (const block of [settings.caption, settings.code, settings.endText]) {
+      if (block.enabled && block.text.trim().length > 0) {
+        await waitForFont(block.type, EXPORT_FONT_WAIT_MS);
+        signal.throwIfAborted();
+      }
     }
 
     const target = context.canvas;
@@ -127,9 +185,11 @@ export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
         x: frame.x,
         y: frame.y,
       },
+      durationSeconds: readLoopSeconds(state),
       grid,
       progress: readLoopProgress(state),
       settings,
+      sound,
     });
     if (layer) {
       context.save();
@@ -139,6 +199,15 @@ export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
     }
   },
 };
+
+/** Timeline loop length for the export, so code-roll phases keep their seconds. */
+function readLoopSeconds(state: unknown): number {
+  const duration = (state as { timeline?: { durationSeconds?: number } }).timeline
+    ?.durationSeconds;
+  return typeof duration === "number" && Number.isFinite(duration) && duration > 0
+    ? duration
+    : LOOP_SECONDS;
+}
 
 /** Forward loop progress for the evaluated export frame. */
 function readLoopProgress(state: unknown): number {
