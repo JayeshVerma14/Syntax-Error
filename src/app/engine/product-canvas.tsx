@@ -215,6 +215,11 @@ export function ProductCanvas(): React.JSX.Element {
     settings.endText.enabled && settings.endText.text.trim().length > 0,
     () => setFontRevision((revision) => revision + 1),
   );
+  useFontArrival(
+    settings.wall.type,
+    settings.wall.enabled && settings.wall.text.trim().length > 0,
+    () => setFontRevision((revision) => revision + 1),
+  );
 
   const liveProgress =
     timeline.durationSeconds > 0

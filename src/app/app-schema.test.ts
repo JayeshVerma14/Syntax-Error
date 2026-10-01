@@ -60,6 +60,7 @@ describe("appSchema", () => {
       "end-text",
       "bars",
       "data",
+      "wall",
       "logo",
       "logo-build",
       "transition",

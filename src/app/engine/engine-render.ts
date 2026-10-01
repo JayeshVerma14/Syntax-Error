@@ -298,7 +298,7 @@ export function renderSyntaxErrorFrame({
       { cellHeight, cellWidth, cols, height: frame.height, rows, width: frame.width },
       progress,
       occupied,
-      reaction.burstEvents,
+      plan.wallBurst ? [...(reaction.burstEvents ?? []), plan.wallBurst] : reaction.burstEvents,
     )) {
       rays[cell.row * cols + cell.column] = 1;
       const kind = settings.burst.particle;

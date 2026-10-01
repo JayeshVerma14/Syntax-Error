@@ -239,6 +239,7 @@ function textLayers(
       text: settings.dataText.items.map((item) => item.text).join(" "),
       type: settings.dataText.type,
     },
+    settings.wall,
   ];
 }
 
