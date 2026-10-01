@@ -87,7 +87,7 @@ const clamp = (value: number, low: number, high: number) => Math.min(high, Math.
 export function readWall(values: Values, type: TypeSettings): WallSettings {
   return {
     blast: readBoolean(values, wallTargets.blast, true),
-    burst: clamp(readNumber(values, wallTargets.burst, 30), 1, 100),
+    burst: clamp(readNumber(values, wallTargets.burst, 1.5), 0.1, 30),
     colGap: clamp(readNumber(values, wallTargets.colGap, 1.5), 0, 10),
     cover: readBoolean(values, wallTargets.cover, true),
     duration: clamp(readNumber(values, wallTargets.duration, 5), 1, 30),
@@ -118,8 +118,11 @@ export type WallSchedule = Readonly<{
 export function wallSchedule(wall: WallSettings, after: number): WallSchedule | null {
   if (!wall.enabled || wall.text.trim().length === 0) return null;
   const start = wall.timing === "start" ? 0 : Math.max(0, Number.isFinite(after) ? after : 0);
-  const weights = wall.hero + wall.land + wall.hold + wall.burst;
-  const unit = wall.duration / weights;
+  // Burst time is seconds taken from the end of Duration; the rest is
+  // shared by the hero, landing and hold by their relative weights.
+  const burst = Math.min(wall.burst, wall.duration * 0.9);
+  const weights = Math.max(1e-6, wall.hero + wall.land + wall.hold);
+  const unit = (wall.duration - burst) / weights;
   const heroEnd = start + wall.hero * unit;
   const fillEnd = heroEnd + wall.land * unit;
   const burstStart = fillEnd + wall.hold * unit;
