@@ -24,7 +24,10 @@ export const formTargets = {
   file: "form.file",
   hold: "form.hold",
   ink: "form.ink",
+  effect: "form.effect",
+  intensity: "form.intensity",
   invert: "form.invert",
+  style: "form.style",
   order: "form.order",
   size: "form.size",
   timing: "form.timing",
@@ -32,6 +35,12 @@ export const formTargets = {
 
 export type FormOrder = "bright" | "centre" | "random" | "top";
 export const FORM_ORDERS: readonly FormOrder[] = ["random", "centre", "top", "bright"];
+/** Particles: colour blocks gather into the picture, which resolves to the real image. Glyphs: one-ink ASCII decode. */
+export type FormStyle = "glyphs" | "particles";
+export const FORM_STYLES: readonly FormStyle[] = ["particles", "glyphs"];
+/** How the gathered particles turn into the real picture. */
+export type FormEffect = "mosaic" | "none";
+export const FORM_EFFECTS: readonly FormEffect[] = ["mosaic", "none"];
 export type FormTiming = "after" | "start";
 export const FORM_TIMINGS: readonly FormTiming[] = ["after", "start"];
 
@@ -42,7 +51,10 @@ export type FormSettings = Readonly<{
   enabled: boolean;
   hold: number;
   ink: string;
+  effect: FormEffect;
+  intensity: number;
   invert: boolean;
+  style: FormStyle;
   order: FormOrder;
   size: number;
   timing: FormTiming;
@@ -58,7 +70,10 @@ export function readForm(values: Values): FormSettings {
     enabled: readBoolean(values, formTargets.enabled, false),
     hold: clamp(readNumber(values, formTargets.hold, 2), 0, 30),
     ink: readHex(values, formTargets.ink, "#FFFFFF"),
+    effect: readString(values, formTargets.effect, FORM_EFFECTS, "mosaic"),
+    intensity: clamp(readNumber(values, formTargets.intensity, 60), 0, 100),
     invert: readBoolean(values, formTargets.invert, false),
+    style: readString(values, formTargets.style, FORM_STYLES, "particles"),
     order: readString(values, formTargets.order, FORM_ORDERS, "random"),
     size: clamp(readNumber(values, formTargets.size, 90), 10, 150),
     timing: readString(values, formTargets.timing, FORM_TIMINGS, "start"),
@@ -94,6 +109,11 @@ export type FormGrid = Readonly<{
   /** 0..1 ink per cell, row-major. */
   tone: Float32Array;
   top: number;
+  /** The picture itself and where it sits in the frame, for the Particles style. */
+  image: CanvasImageSource;
+  rect: Readonly<{ height: number; width: number; x: number; y: number }>;
+  /** The picture sampled into square blocks of `cell` pixels, RGBA per block. */
+  blocks: Readonly<{ cols: number; rgba: Uint8ClampedArray; rows: number; size: number }>;
 }>;
 
 let cached: { grid: FormGrid; key: string } | null = null;
@@ -132,8 +152,24 @@ export function prepareFormGrid(
     const alpha = pixels[offset + 3] / 255;
     tone[index] = (form.invert ? 1 - light : light) * alpha;
   }
+  const width = image.width * fit;
+  const height = image.height * fit;
+  const blockCols = Math.max(1, Math.round(width / cell));
+  const blockRows = Math.max(1, Math.round(height / cell));
+  const blockSampler = new OffscreenCanvas(blockCols, blockRows);
+  const blockContext = blockSampler.getContext("2d", { willReadFrequently: true });
+  if (!blockContext) return null;
+  blockContext.drawImage(image, 0, 0, blockCols, blockRows);
   const grid: FormGrid = {
+    blocks: {
+      cols: blockCols,
+      rgba: blockContext.getImageData(0, 0, blockCols, blockRows).data,
+      rows: blockRows,
+      size: cell,
+    },
     cell,
+    image,
+    rect: { height, width, x: (frameWidth - width) / 2, y: (frameHeight - height) / 2 },
     cols,
     left: (frameWidth - cols * cellWidth) / 2,
     rows,
@@ -164,6 +200,116 @@ function orderOf(form: FormSettings, grid: FormGrid, column: number, row: number
 /** Scrambled characters change this many times a second. */
 const SCRAMBLE_RATE = 18;
 
+/** Share of Form time spent gathering particles before the picture resolves. */
+const GATHER_END = 0.6;
+
+let pixelCanvas: OffscreenCanvas | null = null;
+
+/** Draws the picture at `block`-pixel resolution, hard-edged, like the Mosaic filler. */
+function drawPixelated(context: Paint2D, grid: FormGrid, block: number, alpha: number): void {
+  const { rect } = grid;
+  if (block <= 1.01) {
+    context.globalAlpha = alpha;
+    context.drawImage(grid.image, rect.x, rect.y, rect.width, rect.height);
+    return;
+  }
+  const cols = Math.max(1, Math.ceil(rect.width / block));
+  const rows = Math.max(1, Math.ceil(rect.height / block));
+  if (!pixelCanvas || pixelCanvas.width < cols || pixelCanvas.height < rows) {
+    pixelCanvas = new OffscreenCanvas(Math.max(cols, pixelCanvas?.width ?? 0), Math.max(rows, pixelCanvas?.height ?? 0));
+  }
+  const small = pixelCanvas.getContext("2d");
+  if (!small) return;
+  small.clearRect(0, 0, cols, rows);
+  small.imageSmoothingEnabled = true;
+  small.drawImage(grid.image, 0, 0, cols, rows);
+  context.imageSmoothingEnabled = false;
+  context.globalAlpha = alpha;
+  context.drawImage(pixelCanvas, 0, 0, cols, rows, rect.x, rect.y, cols * block, rows * block);
+  context.imageSmoothingEnabled = true;
+}
+
+/**
+ * Particles: square blocks in the picture's own colours fly in from a scatter
+ * and gather into its shape, then the picture resolves. With Mosaic it comes
+ * up as coarse pixels that refine to the crisp image while hot blocks flash
+ * and cool across it, as in the Mosaic filler; with None it crossfades.
+ */
+function drawParticles(
+  context: Paint2D,
+  form: FormSettings,
+  grid: FormGrid,
+  progress: number,
+  time: number,
+): void {
+  const { blocks, rect } = grid;
+  const size = blocks.size;
+  const resolve = clamp((progress - GATHER_END) / (1 - GATHER_END), 0, 1);
+  context.save();
+  if (resolve < 1) {
+    const diagonal = Math.hypot(rect.width, rect.height);
+    const fadeOut = 1 - clamp(resolve * 1.6, 0, 1);
+    for (let row = 0; row < blocks.rows; row += 1) {
+      for (let column = 0; column < blocks.cols; column += 1) {
+        const index = row * blocks.cols + column;
+        const offset = index * 4;
+        const alpha = blocks.rgba[offset + 3];
+        if (alpha < 24) continue;
+        const dx = (column / Math.max(1, blocks.cols - 1) - 0.5) * 2;
+        const dy = (row / Math.max(1, blocks.rows - 1) - 0.5) * 2;
+        const jitter = hash(index, 2);
+        const order =
+          form.order === "random" ? jitter
+          : form.order === "top" ? (row / Math.max(1, blocks.rows - 1)) * 0.85 + jitter * 0.15
+          : form.order === "bright"
+            ? (1 - (blocks.rgba[offset] + blocks.rgba[offset + 1] + blocks.rgba[offset + 2]) / 765) * 0.85 + jitter * 0.15
+          : (Math.hypot(dx, dy) / Math.SQRT2) * 0.85 + jitter * 0.15;
+        const arrive = order * 0.5 * GATHER_END;
+        const travel = clamp((progress - arrive) / (0.5 * GATHER_END), 0, 1);
+        if (travel <= 0) continue;
+        const eased = 1 - (1 - travel) ** 3;
+        const angle = hash(index, 4) * Math.PI * 2;
+        const reach = (0.3 + 0.7 * hash(index, 5)) * diagonal * 0.6;
+        const targetX = rect.x + (column + 0.5) * (rect.width / blocks.cols);
+        const targetY = rect.y + (row + 0.5) * (rect.height / blocks.rows);
+        const x = targetX + Math.cos(angle) * reach * (1 - eased);
+        const y = targetY + Math.sin(angle) * reach * (1 - eased);
+        const side = size * (0.35 + 0.65 * eased);
+        context.globalAlpha = clamp(travel * 3, 0, 1) * (alpha / 255) * fadeOut;
+        context.fillStyle = `rgb(${blocks.rgba[offset]},${blocks.rgba[offset + 1]},${blocks.rgba[offset + 2]})`;
+        context.fillRect(x - side / 2, y - side / 2, side, side);
+      }
+    }
+  }
+  if (resolve > 0) {
+    if (form.effect === "mosaic" && resolve < 1) {
+      // Coarse pixels refine to the crisp picture.
+      const coarse = size;
+      const block = Math.max(1, Math.round(1 + (coarse - 1) * (1 - resolve) ** 2));
+      drawPixelated(context, grid, block, clamp(resolve * 4, 0, 1));
+      // Hot blocks flash white and cool, only where the picture has ink.
+      const tick = Math.floor(time * 20);
+      const flashes = Math.round((form.intensity / 100) * blocks.cols * blocks.rows * 0.06 * (1 - resolve));
+      const heat = 1 - resolve;
+      for (let flash = 0; flash < flashes; flash += 1) {
+        const column = Math.floor(hash(flash, tick * 3 + 1) * blocks.cols);
+        const row = Math.floor(hash(flash, tick * 3 + 2) * blocks.rows);
+        if (blocks.rgba[(row * blocks.cols + column) * 4 + 3] < 24) continue;
+        const cool = hash(flash, tick * 3 + 3);
+        context.globalAlpha = heat * (0.35 + 0.6 * cool);
+        context.fillStyle = cool > 0.5 ? "#FFFFFF" : "#FFE9A8";
+        const pixel = Math.max(block, size);
+        const x = rect.x + Math.floor(((column + 0.5) * (rect.width / blocks.cols)) / pixel) * pixel;
+        const y = rect.y + Math.floor(((row + 0.5) * (rect.height / blocks.rows)) / pixel) * pixel;
+        context.fillRect(x, y, pixel, pixel);
+      }
+    } else {
+      drawPixelated(context, grid, 1, resolve);
+    }
+  }
+  context.restore();
+}
+
 export function drawForm(
   context: Paint2D,
   form: FormSettings,
@@ -174,6 +320,10 @@ export function drawForm(
   if (!grid || !plan || time < plan.start) return;
   const elapsed = time - plan.start;
   const span = Math.max(1e-6, plan.formed - plan.start);
+  if (form.style === "particles") {
+    drawParticles(context, form, grid, Math.min(1, elapsed / span), time);
+    return;
+  }
   const tick = Math.floor(time * SCRAMBLE_RATE);
   const cellWidth = grid.cell * 0.6;
   context.save();

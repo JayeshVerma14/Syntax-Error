@@ -149,3 +149,28 @@ export const whenForm = {
   all: [{ equals: true, target: "form.enabled" }],
   mode: "conditional",
 } as const;
+
+export const whenFormGlyphs = {
+  all: [
+    { equals: true, target: "form.enabled" },
+    { equals: "glyphs", target: "form.style" },
+  ],
+  mode: "conditional",
+} as const;
+
+export const whenFormParticles = {
+  all: [
+    { equals: true, target: "form.enabled" },
+    { equals: "particles", target: "form.style" },
+  ],
+  mode: "conditional",
+} as const;
+
+export const whenFormMosaic = {
+  all: [
+    { equals: true, target: "form.enabled" },
+    { equals: "particles", target: "form.style" },
+    { equals: "mosaic", target: "form.effect" },
+  ],
+  mode: "conditional",
+} as const;
