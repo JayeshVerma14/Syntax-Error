@@ -260,9 +260,21 @@ export const codeInventory = [
       {
         affectedTargets: [],
         reason:
-          "The Form image switch decides whether the image form settings are usable; all ten are explicit applicability dependents.",
+          "The Form image switch decides whether the image form settings are usable; all thirteen are explicit applicability dependents.",
         role: "branch",
         target: formTargets.enabled,
+      },
+      {
+        affectedTargets: [],
+        reason: "Style decides whether the particle Effect and Intensity or the glyph Ink and Invert apply.",
+        role: "branch",
+        target: formTargets.style,
+      },
+      {
+        affectedTargets: [],
+        reason: "Effect decides whether Intensity applies; only Mosaic uses it.",
+        role: "branch",
+        target: formTargets.effect,
       },
       {
         reason: "Order changes which cells lock first without changing which other controls apply.",
@@ -291,6 +303,9 @@ export const codeInventory = [
     targets: [
       formTargets.enabled,
       formTargets.file,
+      formTargets.style,
+      formTargets.effect,
+      formTargets.intensity,
       formTargets.order,
       formTargets.timing,
       formTargets.duration,

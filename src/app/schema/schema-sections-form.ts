@@ -2,7 +2,7 @@
 
 import type { ToolcraftControlSectionSchema } from "@/toolcraft/runtime";
 
-import { whenForm } from "./schema-conditions";
+import { whenForm, whenFormGlyphs, whenFormMosaic, whenFormParticles } from "./schema-conditions";
 
 const formCost =
   "The image is sampled once per upload, size and cell; each frame draws one character per covered cell.";
@@ -38,7 +38,7 @@ export const formSection: ToolcraftControlSectionSchema = {
       applicability: { mode: "always" },
       defaultValue: false,
       description:
-        "Your image assembles out of glyphs: each cell flickers through random characters, then locks onto the character its tone calls for, until the whole picture stands in one ink. It holds to the end of the loop.",
+        "Your picture appears: particles in its own colours gather into its shape and resolve into the real image, or glyphs flicker and lock into an ASCII likeness. It holds to the end of the loop.",
       label: "Form image",
       performanceReason: formCost,
       performanceRole: "responsiveness",
@@ -54,6 +54,51 @@ export const formSection: ToolcraftControlSectionSchema = {
       performanceRole: "responsiveness",
       target: "form.file",
       type: "fileDrop",
+    },
+    style: {
+      applicability: whenForm,
+      defaultValue: "particles",
+      description:
+        "Particles: blocks in the picture's own colours gather into its shape, then it resolves into the real image. Glyphs: flickering characters lock into a one-ink ASCII likeness.",
+      label: "Style",
+      options: [
+        { label: "Particles", value: "particles" },
+        { label: "Glyphs", value: "glyphs" },
+      ],
+      performanceReason: formCost,
+      performanceRole: "responsiveness",
+      target: "form.style",
+      type: "segmented",
+    },
+    effect: {
+      applicability: whenFormParticles,
+      defaultValue: "mosaic",
+      description:
+        "How the gathered particles become the real picture. Mosaic: coarse pixels refine to crisp while hot blocks flash and cool, like the Mosaic filler. None: a plain crossfade.",
+      label: "Effect",
+      options: [
+        { label: "Mosaic", value: "mosaic" },
+        { label: "None", value: "none" },
+      ],
+      performanceReason: formCost,
+      performanceRole: "responsiveness",
+      target: "form.effect",
+      type: "segmented",
+    },
+    intensity: {
+      applicability: whenFormMosaic,
+      defaultValue: 60,
+      description: "How many hot blocks flash and cool across the picture as it sharpens.",
+      label: "Intensity",
+      max: 100,
+      min: 0,
+      performanceReason: formCost,
+      performanceRole: "responsiveness",
+      sliderValueKind: "continuous",
+      step: 1,
+      target: "form.intensity",
+      type: "slider",
+      unit: "%",
     },
     order: {
       applicability: whenForm,
@@ -87,10 +132,10 @@ export const formSection: ToolcraftControlSectionSchema = {
     },
     duration: slider("Form time", "form.duration", 3, 0.2, 30, 0.1, "s", "Seconds from the first flicker until every cell has locked."),
     hold: slider("Hold time", "form.hold", 2, 0, 30, 0.1, "s", "Seconds the formed image holds; the loop runs at least this long."),
-    cell: slider("Glyph size", "form.cell", 12, 4, 64, 1, "px", "Height of one character cell; smaller cells show more detail."),
+    cell: slider("Glyph size", "form.cell", 12, 4, 64, 1, "px", "Size of one particle or character cell; smaller cells show more detail."),
     size: slider("Size", "form.size", 90, 10, 150, 1, "%", "How much of the frame the image fills."),
     ink: {
-      applicability: whenForm,
+      applicability: whenFormGlyphs,
       defaultValue: "#FFFFFF",
       description: "Colour of every glyph.",
       label: "Ink",
@@ -100,7 +145,7 @@ export const formSection: ToolcraftControlSectionSchema = {
       type: "color",
     },
     invert: {
-      applicability: whenForm,
+      applicability: whenFormGlyphs,
       defaultValue: false,
       description: "Forms the image from its dark parts instead of its light ones, for dark art on a light ground.",
       label: "Invert",
