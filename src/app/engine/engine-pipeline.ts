@@ -188,6 +188,7 @@ const DRAW_TARGETS = [
   "wall.type",
   "wall.timing",
   "wall.duration",
+  "wall.entry",
   "wall.hero",
   "wall.land",
   "wall.hold",

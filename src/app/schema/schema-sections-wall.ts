@@ -80,6 +80,23 @@ export const wallSection: ToolcraftControlSectionSchema = {
       target: "wall.timing",
       type: "segmented",
     },
+    entry: {
+      applicability: whenWall,
+      defaultValue: "flash",
+      description:
+        "How each word arrives. Flash lands it as a selected box that snaps back; Pop springs it in; Glitch tears it in with stutters; Plain just appears. Landed words keep flashing now and then until the burst.",
+      label: "Arrival",
+      options: [
+        { label: "Flash", value: "flash" },
+        { label: "Pop", value: "pop" },
+        { label: "Glitch", value: "glitch" },
+        { label: "Plain", value: "plain" },
+      ],
+      performanceReason: wallCost,
+      performanceRole: "responsiveness",
+      target: "wall.entry",
+      type: "segmented",
+    },
     duration: {
       applicability: whenWall,
       defaultValue: 5,

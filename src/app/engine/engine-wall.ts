@@ -28,6 +28,7 @@ export const wallTargets = {
   colGap: "wall.colGap",
   cover: "wall.cover",
   duration: "wall.duration",
+  entry: "wall.entry",
   enabled: "wall.enabled",
   land: "wall.land",
   force: "wall.force",
@@ -39,6 +40,14 @@ export const wallTargets = {
   timing: "wall.timing",
   type: "wall.type",
 } as const;
+
+/** How each word arrives: snaps in boxed, springs in, tears in, or just appears. */
+export type WallEntry = "flash" | "glitch" | "plain" | "pop";
+export const WALL_ENTRIES: readonly WallEntry[] = ["flash", "pop", "glitch", "plain"];
+/** Seconds one word takes to arrive. */
+const ENTRY_SECONDS = 0.22;
+/** Chance per tick that a landed word flashes boxed. */
+const SHIMMER = 0.006;
 
 export type WallTiming = "after" | "start";
 export const WALL_TIMINGS: readonly WallTiming[] = ["after", "start"];
@@ -61,6 +70,7 @@ export type WallSettings = Readonly<{
   cover: boolean;
   duration: number;
   enabled: boolean;
+  entry: WallEntry;
   land: number;
   force: number;
   hero: number;
@@ -82,6 +92,7 @@ export function readWall(values: Values, type: TypeSettings): WallSettings {
     cover: readBoolean(values, wallTargets.cover, true),
     duration: clamp(readNumber(values, wallTargets.duration, 5), 1, 30),
     enabled: readBoolean(values, wallTargets.enabled, false),
+    entry: readString(values, wallTargets.entry, WALL_ENTRIES, "flash"),
     land: clamp(readNumber(values, wallTargets.land, 30), 1, 100),
     force: clamp(readNumber(values, wallTargets.force, 60), 10, 300),
     hero: clamp(readNumber(values, wallTargets.hero, 15), 1, 100),
@@ -231,14 +242,46 @@ export function drawWall(
     for (let column = -halfCols; column <= halfCols; column += 1) {
       const hero = row === 0 && column === 0;
       const seed = (row + 512) * 1031 + (column + 512);
-      if (!hero) {
-        // Each word lands whole at its own random moment through the fill.
-        const lands = plan.heroEnd + hash(seed, 1) * fillSpan * 0.92;
-        if (time < lands) continue;
-      }
+      // Each word lands whole at its own random moment through the fill,
+      // loosely rippling out from the centre so the screen fills with a pulse.
+      const ring = Math.min(1, Math.hypot(column / halfCols, row / halfRows) / Math.SQRT2);
+      const lands = hero
+        ? plan.start
+        : plan.heroEnd + (hash(seed, 1) * 0.7 + ring * 0.3) * fillSpan * 0.92;
+      if (time < lands) continue;
       let x = centreX + column * stepX;
       let y = centreY + row * stepY;
       let angle = 0;
+      let scale = 1;
+      let boxed = hero;
+      let flicker = 1;
+      if (!bursting && wall.entry !== "plain") {
+        const entry = Math.min(1, (time - lands) / ENTRY_SECONDS);
+        const tick = Math.floor(time * 24);
+        if (entry < 1) {
+          const rest = 1 - entry;
+          if (wall.entry === "flash") {
+            // Lands as a selected box that snaps back to plain text.
+            if (entry < 0.45) boxed = true;
+            scale = 1 + 0.3 * rest * rest;
+          } else if (wall.entry === "pop") {
+            // Springs in from large with a small overshoot.
+            const back = 1 + 2.7 * (entry - 1) ** 3 + 1.7 * (entry - 1) ** 2;
+            scale = 0.2 + 0.8 * back + 0.9 * rest * rest;
+            flicker = Math.min(1, entry * 3);
+          } else {
+            // Glitch: tears in sideways, stutters and flashes inverted.
+            x += (hash(seed, tick + 40) - 0.5) * stepX * 0.5 * rest;
+            if (hash(seed, tick + 80) < 0.35 * rest) flicker = 0;
+            boxed = boxed || hash(seed, tick + 120) < 0.4 * rest;
+          }
+        } else if (!hero && hash(seed, tick + 200) < SHIMMER) {
+          // Landed words keep catching the light until the burst.
+          boxed = true;
+        }
+      }
+      if (flicker === 0) continue;
+      if (!bursting) context.globalAlpha = baseAlpha * flicker;
       if (bursting) {
         const dx = x - centreX;
         const dy = y - centreY;
@@ -252,8 +295,8 @@ export function drawWall(
         angle = (hash(seed, 5) - 0.5) * 2 * Math.PI * (wall.spin / 100) * 2 * travel;
         context.globalAlpha = baseAlpha * fade;
       }
-      const part = hero ? sprite.boxed : sprite.plain;
-      if (angle === 0) {
+      const part = boxed ? sprite.boxed : sprite.plain;
+      if (angle === 0 && scale === 1) {
         context.drawImage(
           sprite.canvas, part.x, 0, part.width, sprite.height,
           x - part.width / 2, y - sprite.height / 2, part.width, sprite.height,
@@ -263,6 +306,7 @@ export function drawWall(
       context.save();
       context.translate(x, y);
       context.rotate(angle);
+      context.scale(scale, scale);
       context.drawImage(
         sprite.canvas, part.x, 0, part.width, sprite.height,
         -part.width / 2, -sprite.height / 2, part.width, sprite.height,
