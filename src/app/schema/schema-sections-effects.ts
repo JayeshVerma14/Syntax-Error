@@ -8,6 +8,7 @@ import {
   MAX_SWIRL_PARTICLES,
   MIN_BURST_SPEED,
 } from "../engine/engine-constants";
+import { LAYER_PARTICLE_OPTIONS } from "../engine/engine-particles";
 import { whenBursting, whenCaptioned, whenSwirling } from "./schema-conditions";
 
 export const burstSection: ToolcraftControlSectionSchema = {
@@ -23,6 +24,18 @@ export const burstSection: ToolcraftControlSectionSchema = {
       performanceRole: "responsiveness",
       target: "burst.enabled",
       type: "switch",
+    },
+    particle: {
+      applicability: whenBursting,
+      defaultValue: "glyphs",
+      description:
+        "What the burst throws: its stroke characters, or dots, dashes and bars that lie along each ray, plus signs, blocks, rings or boxed squares.",
+      label: "Particle",
+      options: LAYER_PARTICLE_OPTIONS,
+      performanceReason: "Particle changes the mark each burst cell draws, not how many cells draw.",
+      performanceRole: "responsiveness",
+      target: "burst.particle",
+      type: "select",
     },
     origin: {
       applicability: whenBursting,
@@ -127,6 +140,18 @@ export const swirlSection: ToolcraftControlSectionSchema = {
       performanceRole: "responsiveness",
       target: "swirl.enabled",
       type: "switch",
+    },
+    particle: {
+      applicability: whenSwirling,
+      defaultValue: "glyphs",
+      description:
+        "What orbits: its stream characters, or dots, dashes and bars that turn with their orbit, plus signs, blocks, rings or boxed squares.",
+      label: "Particle",
+      options: LAYER_PARTICLE_OPTIONS,
+      performanceReason: "Particle changes the mark each orbiting particle draws, not how many there are.",
+      performanceRole: "responsiveness",
+      target: "swirl.particle",
+      type: "select",
     },
     center: {
       applicability: whenSwirling,

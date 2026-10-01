@@ -100,6 +100,29 @@ describe("audio reactions", () => {
     expect(reaction.burstEvents).toBeUndefined();
   });
 
+  it("keeps every layer still in silence", () => {
+    const settings = readEngineSettings({ "audio.enabled": true, "audio.flashOnBeat": true, "audio.shakeOnBeat": true, "audio.zoom": 100 });
+    const reaction = reactToAudio(settings, SILENT_AUDIO);
+    expect(reaction.hit).toEqual({ flash: 0, shakeX: 0, shakeY: 0, zoom: 1 });
+    expect(reaction.knockout).toBe(settings.knockout);
+    expect(reaction.pulse.beat).toBe(0);
+    expect(reaction.pulse.beatIndex).toBe(-1);
+  });
+
+  it("punches, shakes and flashes the picture on a hard beat", () => {
+    const settings = readEngineSettings({ "audio.enabled": true, "audio.flashOnBeat": true, "audio.shakeOnBeat": true, "audio.zoom": 100 });
+    const reaction = reactToAudio(settings, { ...onBeat, recentBeats: [{ ageSeconds: 0.02, index: 3, strength: 0.9 }] });
+    expect(reaction.hit.zoom).toBeGreaterThan(1);
+    expect(Math.abs(reaction.hit.shakeX) + Math.abs(reaction.hit.shakeY)).toBeGreaterThan(0);
+    expect(reaction.hit.flash).toBeGreaterThan(0);
+    expect(reaction.knockout).toBeGreaterThan(settings.knockout);
+    expect(reaction.pulse.beatIndex).toBe(3);
+    // Without the switches a beat only punches.
+    const plain = reactToAudio(readEngineSettings({ "audio.enabled": true, "audio.zoom": 100 }), onBeat);
+    expect(plain.hit.flash).toBe(0);
+    expect(plain.hit.shakeX).toBe(0);
+  });
+
   it("swells on a beat and fires a burst when asked", () => {
     const settings = readEngineSettings({ "audio.burstOnBeat": true, "audio.enabled": true });
     const reaction = reactToAudio(settings, onBeat);

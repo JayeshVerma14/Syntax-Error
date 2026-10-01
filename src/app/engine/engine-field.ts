@@ -1,8 +1,10 @@
 /**
  * Motion for the idle field, as in the reference films where the quiet
  * marks around a subject never sit still: they boil as characters are
- * re-picked, march sideways a cell at a time, fall in columns, or light up
- * as a denser band sweeps through.
+ * re-picked, march sideways a cell at a time, fall in columns, light up as a
+ * denser band sweeps through, morph from one particle to the next, twinkle
+ * as a pulse of light crosses a dot matrix, or come and go in patches like a
+ * targeting grid.
  *
  * The field moves while the clearance around the subject stays where the
  * subject is, so the marks stream behind it. Speed is in real seconds, and
@@ -13,7 +15,15 @@
 
 import { backdropGlyph, backdropShown } from "./engine-glyphs";
 
-export type FieldMotion = "drift" | "rain" | "shimmer" | "still" | "wave";
+export type FieldMotion =
+  | "drift"
+  | "morph"
+  | "patches"
+  | "rain"
+  | "shimmer"
+  | "still"
+  | "twinkle"
+  | "wave";
 
 export const FIELD_MOTIONS: readonly FieldMotion[] = [
   "still",
@@ -21,10 +31,16 @@ export const FIELD_MOTIONS: readonly FieldMotion[] = [
   "drift",
   "rain",
   "wave",
+  "morph",
+  "twinkle",
+  "patches",
 ];
 
-/** A field cell as drawn this frame: its character and a size factor for dots. */
-export type FieldPick = { glyph: string; scale: number };
+/**
+ * A field cell as drawn this frame: its character, a size factor, and the
+ * Morph step it shows (-1 when the cell keeps its own particle).
+ */
+export type FieldPick = { glyph: string; scale: number; stage: number };
 
 /** Characters the field moves through, faintest first. */
 const FIELD_LADDER: readonly string[] = [".", "-", ">", "+", "#"];
@@ -43,6 +59,18 @@ const travelRate = (speed: number) => 0.3 + speed * 0.15;
 const shimmerRate = (speed: number) => 0.03 + speed * 0.02;
 /** Wave, in passes per second. */
 const waveRate = (speed: number) => speed * 0.006;
+/** Morph, in full particle cycles per second. */
+const morphRate = (speed: number) => 0.05 + speed * 0.012;
+/** Twinkle, in pulses per second. */
+const twinkleRate = (speed: number) => 0.05 + speed * 0.012;
+/** Patches, in patch changes per second. */
+const patchRate = (speed: number) => 0.1 + speed * 0.02;
+
+/** Particles Morph steps through before it repeats. */
+export const MORPH_STAGES = 4;
+/** A patch is this many cells wide and tall. */
+const PATCH_COLUMNS = 6;
+const PATCH_ROWS = 4;
 
 function hash(column: number, row: number, salt: number): number {
   let h = Math.imul(column + 1, 374_761_393) ^ Math.imul(row + 1, 668_265_263);
@@ -52,6 +80,11 @@ function hash(column: number, row: number, salt: number): number {
 
 function wrap(value: number, size: number): number {
   return ((value % size) + size) % size;
+}
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  const t = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }
 
 function ladderStep(glyph: string, steps: number): string {
@@ -101,7 +134,7 @@ export function createFieldSampler(
   density: number,
   progress: number,
 ): (column: number, row: number) => FieldPick | null {
-  const pick: FieldPick = { glyph: "", scale: 1 };
+  const pick: FieldPick = { glyph: "", scale: 1, stage: -1 };
   const loop = wrap(progress, 1);
   const pace = Math.min(100, Math.max(1, speed));
   const seconds = loopSeconds > 0 ? loopSeconds : 4;
@@ -110,6 +143,7 @@ export function createFieldSampler(
     if (!backdropShown(column, row, density)) return null;
     pick.glyph = backdropGlyph(column, row);
     pick.scale = 1;
+    pick.stage = -1;
     return pick;
   };
 
@@ -141,6 +175,7 @@ export function createFieldSampler(
         if (shown && hash(column, row, tick + 80) < 0.08) return null;
         if (!shown && !(hash(column, row, tick + 90) < 0.04 * density)) return null;
         pick.scale = 1;
+        pick.stage = -1;
         pick.glyph =
           hash(column, row, tick + 40) < 0.35
             ? FIELD_LADDER[Math.floor(hash(column, row, tick + 60) * 3)]
@@ -165,6 +200,49 @@ export function createFieldSampler(
         pick.glyph = ladderStep(pick.glyph, Math.round(lift * 2));
         pick.scale = 1 + 0.8 * lift;
         return pick;
+      };
+    }
+    case "morph": {
+      // Cells flip to the next particle as a front crosses the field, with
+      // a little per-cell lag so the change ripples rather than cuts.
+      const cycles = Math.max(1, Math.round(morphRate(pace) * seconds));
+      return (column, row) => {
+        const base = at(column, row);
+        if (!base) return null;
+        const phase = loop * cycles + (0.2 * column) / Math.max(1, cols) + 0.05 * hash(column, row, 41);
+        base.stage = Math.floor(wrap(phase, 1) * MORPH_STAGES) % MORPH_STAGES;
+        return base;
+      };
+    }
+    case "twinkle": {
+      // A pulse of light crosses the matrix on a diagonal; lit cells swell.
+      const pulses = Math.max(1, Math.round(twinkleRate(pace) * seconds));
+      return (column, row) => {
+        const base = at(column, row);
+        if (!base) return null;
+        const along = (0.6 * column) / Math.max(1, cols) + (0.4 * row) / Math.max(1, rows);
+        const wave = 0.5 + 0.5 * Math.cos(Math.PI * 2 * (loop * pulses - along - 0.15 * hash(column, row, 43)));
+        base.scale = 0.35 + 1.3 * wave ** 6;
+        return base;
+      };
+    }
+    case "patches": {
+      // Blocks of the field switch on and off; a block shrinks in and out.
+      const epochs = Math.max(2, Math.round(patchRate(pace) * seconds));
+      const now = loop * epochs;
+      const epoch = Math.floor(now);
+      const blend = smoothstep(0.7, 1, now - epoch);
+      return (column, row) => {
+        const px = Math.floor(column / PATCH_COLUMNS);
+        const py = Math.floor(row / PATCH_ROWS);
+        const on = hash(px, py, 50 + (epoch % epochs)) < 0.45 ? 1 : 0;
+        const next = hash(px, py, 50 + ((epoch + 1) % epochs)) < 0.45 ? 1 : 0;
+        const level = on + (next - on) * blend;
+        if (level < 0.05) return null;
+        const base = at(column, row);
+        if (!base) return null;
+        base.scale = level;
+        return base;
       };
     }
     default:

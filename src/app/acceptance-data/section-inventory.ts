@@ -1,6 +1,7 @@
 /** Section grouping decisions, one entry per rendered section, machine-checked by base coverage. */
 
 import type { ToolcraftControlSectionInventoryEntry } from "../acceptance/types";
+import { particleTargets } from "../engine/engine-particles";
 import { engineTargets } from "../engine/engine-settings";
 import {
   audioInventory,
@@ -166,9 +167,15 @@ export const appControlSectionInventory = [
       {
         affectedTargets: [],
         reason:
-          "The idle field switch decides whether the field settings are usable; all five are explicit applicability dependents.",
+          "The idle field switch decides whether the field settings are usable; all seven are explicit applicability dependents.",
         role: "branch",
         target: engineTargets.backdropOn,
+      },
+      {
+        reason:
+          "Particle changes what each field cell draws without changing which other controls apply.",
+        role: "parameter",
+        target: particleTargets.kind,
       },
       {
         reason:
@@ -185,10 +192,12 @@ export const appControlSectionInventory = [
       },
     ],
     groupingReason:
-      "One entity: the quiet field in the empty cells, its density, its margin from the subject, how it moves and its strength. These reset together.",
+      "One entity: the quiet field in the empty cells, what it is made of, its density, its margin from the subject, how it moves and its strength. These reset together.",
     id: "field",
     targets: [
       engineTargets.backdropOn,
+      particleTargets.kind,
+      particleTargets.size,
       engineTargets.backdropDensity,
       engineTargets.backdropClearance,
       engineTargets.backdropMotion,
@@ -301,9 +310,14 @@ export const appControlSectionInventory = [
       {
         affectedTargets: [],
         reason:
-          "The burst switch decides whether the burst settings are usable; all six are explicit applicability dependents.",
+          "The burst switch decides whether the burst settings are usable; all seven are explicit applicability dependents.",
         role: "branch",
         target: engineTargets.burstOn,
+      },
+      {
+        reason: "Particle changes what the burst throws without changing which other controls apply.",
+        role: "parameter",
+        target: "burst.particle",
       },
       {
         reason: "Ray count changes its own lines without changing which other controls apply.",
@@ -321,6 +335,7 @@ export const appControlSectionInventory = [
     id: "burst",
     targets: [
       engineTargets.burstOn,
+      "burst.particle",
       engineTargets.burstOrigin,
       engineTargets.burstRays,
       engineTargets.burstReach,
@@ -337,9 +352,14 @@ export const appControlSectionInventory = [
       {
         affectedTargets: [],
         reason:
-          "The swirl switch decides whether the swirl settings are usable; all five are explicit applicability dependents.",
+          "The swirl switch decides whether the swirl settings are usable; all six are explicit applicability dependents.",
         role: "branch",
         target: engineTargets.swirlOn,
+      },
+      {
+        reason: "Particle changes what orbits without changing which other controls apply.",
+        role: "parameter",
+        target: "swirl.particle",
       },
       {
         reason: "Turns changes its own orbit speed without changing which other controls apply.",
@@ -352,6 +372,7 @@ export const appControlSectionInventory = [
     id: "swirl",
     targets: [
       engineTargets.swirlOn,
+      "swirl.particle",
       engineTargets.swirlCenter,
       engineTargets.swirlCount,
       engineTargets.swirlRadius,

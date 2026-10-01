@@ -12,6 +12,7 @@ import {
 } from "@/toolcraft/runtime/react";
 
 import { sampleAudio, songSecondsAt } from "./engine-audio";
+import { barLines } from "./engine-bars";
 import { isFontReady, waitForFont } from "./engine-fonts";
 import {
   onFootageFrame,
@@ -42,6 +43,7 @@ import styles from "./product-canvas.module.css";
 import { useAudioPlayback } from "./use-audio-playback";
 import { useCodeLoopSync } from "./use-code-loop-sync";
 import { useKeyframeFocus } from "./use-keyframe-focus";
+import { useLogoArt } from "./use-logo-art";
 import { useSong } from "./use-song";
 import { useVideoQualityPreset } from "./use-video-quality-preset";
 
@@ -199,6 +201,16 @@ export function ProductCanvas(): React.JSX.Element {
     () => setFontRevision((revision) => revision + 1),
   );
   useFontArrival(
+    settings.bars.type,
+    settings.bars.enabled && barLines(settings.bars).length > 0,
+    () => setFontRevision((revision) => revision + 1),
+  );
+  useFontArrival(
+    settings.dataText.type,
+    settings.dataText.enabled && settings.dataText.items.length > 0,
+    () => setFontRevision((revision) => revision + 1),
+  );
+  useFontArrival(
     settings.endText.type,
     settings.endText.enabled && settings.endText.text.trim().length > 0,
     () => setFontRevision((revision) => revision + 1),
@@ -282,6 +294,7 @@ export function ProductCanvas(): React.JSX.Element {
   const rect = frame.kind === "ready" ? frame.rect : null;
   const width = rect?.width ?? 0;
   const height = rect?.height ?? 0;
+  const logo = useLogoArt(mediaAssets, presentationUrls, settings.logo, width, height);
 
   // Decode only when the source or its frame changes. Cell size is not part of
   // this key: every grid density is averaged out of the same raster.
@@ -322,28 +335,31 @@ export function ProductCanvas(): React.JSX.Element {
     return grid;
   };
 
-  React.useEffect(() => {
+  /** Sizes the backing store to the artboard and returns a cleared, scaled context. */
+  const prepareContext = (): CanvasRenderingContext2D | null => {
     const canvas = canvasRef.current;
-    if (!canvas || width < 1 || height < 1) return;
-
+    if (!canvas || width < 1 || height < 1) return null;
     const ratio = (globalThis.devicePixelRatio || 1) * Math.max(1, renderScale);
     const backingWidth = Math.max(1, Math.round(width * ratio));
     const backingHeight = Math.max(1, Math.round(height * ratio));
     if (canvas.width !== backingWidth) canvas.width = backingWidth;
     if (canvas.height !== backingHeight) canvas.height = backingHeight;
-
     const context = canvas.getContext("2d");
-    if (!context) return;
-
+    if (!context) return null;
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.scale(backingWidth / width, backingHeight / height);
+    return context;
+  };
 
+  /** Draws one preview frame, then the editor guides above it. */
+  const paintFrame = (context: CanvasRenderingContext2D) => {
     renderSyntaxErrorFrame({
       context,
       durationSeconds: timeline.durationSeconds,
       frame: { height, width, x: 0, y: 0 },
       grid: currentGrid(),
+      logo,
       progress: loopProgress,
       settings,
       sound,
@@ -353,9 +369,15 @@ export function ProductCanvas(): React.JSX.Element {
       frame: { height, width, x: 0, y: 0 },
       settings,
     });
+  };
+
+  React.useEffect(() => {
+    const context = prepareContext();
+    if (context) paintFrame(context);
   }, [
     fontRevision,
     height,
+    logo,
     loopProgress,
     timeline.durationSeconds,
     renderScale,

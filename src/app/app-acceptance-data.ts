@@ -8,7 +8,9 @@ import { codeAcceptance } from "./acceptance-data/acceptance-rows-code";
 import { crtAcceptance } from "./acceptance-data/acceptance-rows-crt";
 import { editingAcceptance } from "./acceptance-data/acceptance-rows-editing";
 import { layerAcceptance } from "./acceptance-data/acceptance-rows-layers";
+import { overlayAcceptance } from "./acceptance-data/acceptance-rows-overlays";
 import { samplingAcceptance } from "./acceptance-data/acceptance-rows-sampling";
+import { sequenceAcceptance } from "./acceptance-data/acceptance-rows-sequence";
 import { viewAcceptance } from "./acceptance-data/acceptance-rows-view";
 
 /**
@@ -65,6 +67,8 @@ export const appAcceptance: readonly ToolcraftComponentAcceptance[] = [
   ...editingAcceptance,
   ...layerAcceptance,
   ...codeAcceptance,
+  ...overlayAcceptance,
+  ...sequenceAcceptance,
   ...viewAcceptance,
   ...crtAcceptance,
   ...audioAcceptance,

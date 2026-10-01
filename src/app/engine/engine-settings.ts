@@ -25,9 +25,19 @@ import {
   type UnitShape,
 } from "./engine-constants";
 import { readAudio, type AudioSettings } from "./engine-audio";
+import { barTargets, readBars, type BarSettings } from "./engine-bars";
 import type { CameraSettings } from "./engine-camera";
 import { readCrt, type CrtSettings } from "./engine-crt";
+import { DATA_TEXT_TYPE, dataTextTargets, readDataText, type DataTextSettings } from "./engine-datatext";
 import { FIELD_MOTIONS, type FieldMotion } from "./engine-field";
+import { readLogo, type LogoSettings } from "./engine-logo";
+import { readTransition, type TransitionSettings } from "./engine-transition";
+import {
+  readLayerParticle,
+  readParticles,
+  type LayerParticle,
+  type ParticleSettings,
+} from "./engine-particles";
 import {
   DEFAULT_CODE_BREAK_SECONDS,
   DEFAULT_CODE_PAUSE_SECONDS,
@@ -194,6 +204,8 @@ export type BackdropSettings = Readonly<{
   motion: FieldMotion;
   /** 0..100. */
   opacity: number;
+  /** What the field is made of. */
+  particles: ParticleSettings;
   /** 1..100: how fast the field moves, in real time. */
   speed: number;
 }>;
@@ -206,6 +218,8 @@ export type BurstSettings = Readonly<{
   count: number;
   enabled: boolean;
   origin: VectorPoint;
+  /** What the rays are made of. */
+  particle: LayerParticle;
   rays: number;
   /** Ray length as a share of the frame diagonal, in percent. */
   reach: number;
@@ -221,6 +235,8 @@ export type SwirlSettings = Readonly<{
   center: VectorPoint;
   count: number;
   enabled: boolean;
+  /** What orbits. */
+  particle: LayerParticle;
   /** Orbit radius as a share of the shorter frame side, in percent. */
   radius: number;
   /** Whole turns per timeline loop. */
@@ -284,6 +300,7 @@ export type EndTextSettings = CaptionSettings &
 export type EngineSettings = Readonly<{
   audio: AudioSettings;
   backdrop: BackdropSettings;
+  bars: BarSettings;
   background: string;
   burst: BurstSettings;
   camera: CameraSettings;
@@ -292,6 +309,7 @@ export type EngineSettings = Readonly<{
   circleOverlay: boolean;
   code: CodeRollSettings;
   crt: CrtSettings;
+  dataText: DataTextSettings;
   colorDiffuse: boolean;
   colorMatch: ColorMatch;
   contrast: number;
@@ -309,6 +327,7 @@ export type EngineSettings = Readonly<{
   inks: readonly string[];
   invert: boolean;
   jitter: number;
+  logo: LogoSettings;
   /** 0..100: share of bright cells drawn boxed, in short runs, with the mark cut out. */
   knockout: number;
   layout: GridLayout;
@@ -324,6 +343,7 @@ export type EngineSettings = Readonly<{
   sourceKind: SourceKind;
   swirl: SwirlSettings;
   text: string;
+  transition: TransitionSettings;
   type: TypeSettings;
   unitAngle: number;
   unitFloor: number;
@@ -447,6 +467,8 @@ const CAPTION_TYPE: TypeSettings = {
   textCase: "original",
 };
 
+const BAR_TYPE: TypeSettings = { ...CAPTION_TYPE, fontSize: 26 };
+
 const CODE_TYPE: TypeSettings = {
   ...CAPTION_TYPE,
   fontSize: 18,
@@ -501,13 +523,16 @@ export function readEngineSettings(values: Values): EngineSettings {
       enabled: readBoolean(values, engineTargets.backdropOn, false),
       motion: readString(values, engineTargets.backdropMotion, FIELD_MOTIONS, "still"),
       opacity: readNumber(values, engineTargets.backdropOpacity, 70),
+      particles: readParticles(values),
       speed: readNumber(values, engineTargets.backdropSpeed, 20),
     },
     background: readHex(values, engineTargets.background, "#F2F0ED"),
+    bars: readBars(values, readTypeValue(values, barTargets.type, BAR_TYPE)),
     burst: {
       count: readNumber(values, engineTargets.burstCount, 1),
       enabled: readBoolean(values, engineTargets.burstOn, false),
       origin: readVector(values, engineTargets.burstOrigin, { x: 0, y: 0.55 }),
+      particle: readLayerParticle(values, "burst.particle"),
       rays: readNumber(values, engineTargets.burstRays, 14),
       reach: readNumber(values, engineTargets.burstReach, 90),
       speed: readNumber(values, engineTargets.burstSpeed, 100),
@@ -546,6 +571,7 @@ export function readEngineSettings(values: Values): EngineSettings {
     circleOverlay: readBoolean(values, engineTargets.circleOverlay, false),
     code: readCodeRoll(values),
     crt: readCrt(values),
+    dataText: readDataText(values, readTypeValue(values, dataTextTargets.type, DATA_TEXT_TYPE)),
     colorDiffuse: readBoolean(values, engineTargets.colorDiffuse, false),
     colorMatch: readString(
       values,
@@ -587,6 +613,7 @@ export function readEngineSettings(values: Values): EngineSettings {
     inks: readStringList(values, engineTargets.inks, DEFAULT_INKS),
     invert: readBoolean(values, engineTargets.invert, false),
     jitter: readNumber(values, engineTargets.jitter, 0),
+    logo: readLogo(values, readTypeValue(values, engineTargets.codeType, CODE_TYPE)),
     knockout: readNumber(values, engineTargets.knockout, 0),
     layout: readString(
       values,
@@ -630,10 +657,12 @@ export function readEngineSettings(values: Values): EngineSettings {
       center: readVector(values, engineTargets.swirlCenter, { x: 0, y: 0 }),
       count: readNumber(values, engineTargets.swirlCount, 240),
       enabled: readBoolean(values, engineTargets.swirlOn, false),
+      particle: readLayerParticle(values, "swirl.particle"),
       radius: readNumber(values, engineTargets.swirlRadius, 42),
       turns: readNumber(values, engineTargets.swirlTurns, 1),
     },
     text: readText(values, engineTargets.sourceText, "SYNTAX"),
+    transition: readTransition(values),
     type: readTypeValue(values, engineTargets.sourceType, WORDMARK_TYPE),
     unitAngle: readNumber(values, engineTargets.unitAngle, 0),
     unitFloor: readNumber(values, engineTargets.unitFloor, 0),

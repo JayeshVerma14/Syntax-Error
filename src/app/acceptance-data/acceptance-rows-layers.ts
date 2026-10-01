@@ -1,6 +1,7 @@
 /** Acceptance rows for the procedural layers: the terminal look, glyph type, the idle field, burst, swirl and caption. */
 
 import type { ToolcraftComponentAcceptance } from "../acceptance/types";
+import { particleTargets } from "../engine/engine-particles";
 import { engineTargets } from "../engine/engine-settings";
 import { controlBrowser } from "./acceptance-browser";
 
@@ -95,6 +96,35 @@ export const layerAcceptance: readonly ToolcraftComponentAcceptance[] = [
   },
   {
     automated: true,
+    automatedTestName: "declares the field particle selector",
+    browser: controlBrowser("browser: particle changes what the field is made of"),
+    componentType: "select",
+    evidence: "product-output",
+    expectedObservable:
+      "Match marks follows the unit shape; Glyphs, Dots, Rings, Bars, Dashes, Plus, Crosshair, Boxes, Blocks and Mix each redraw every field cell as that particle.",
+    fixture: "wordmark source with the idle field on",
+    id: "field.particle",
+    kind: "control",
+    optionCoverage: "each-visible-item",
+    target: particleTargets.kind,
+    userAction: "Select each Particle option.",
+  },
+  {
+    automated: true,
+    automatedTestName: "declares the field particle size slider",
+    browser: controlBrowser("browser: particle size scales the field marks"),
+    componentType: "slider",
+    evidence: "product-output",
+    expectedObservable: "Raising Particle size makes every field mark larger; lowering it makes them smaller.",
+    fixture: "wordmark source with the idle field on",
+    id: "field.size",
+    kind: "control",
+    target: particleTargets.size,
+    timelineCoverage: "keyframes",
+    userAction: "Raise Particle size, then lower it.",
+  },
+  {
+    automated: true,
     automatedTestName: "declares the field density slider",
     browser: controlBrowser("browser: density fills empty cells with a quiet field"),
     componentType: "slider",
@@ -144,11 +174,11 @@ export const layerAcceptance: readonly ToolcraftComponentAcceptance[] = [
     componentType: "select",
     evidence: "timeline-output",
     expectedObservable:
-      "Still holds the field; Shimmer re-picks its characters so it boils; Drift marches it right a cell at a time; Rain drops it in columns; Wave sweeps a band of denser marks through it. The clearance around the subject stays in place.",
+      "Still holds the field; Shimmer re-picks its characters so it boils; Drift marches it right a cell at a time; Rain drops it in columns; Wave sweeps a band of denser marks through it; Morph flips each cell to the next particle as a front crosses; Twinkle swells cells as a pulse of light crosses; Patches switches blocks of the field on and off. The clearance around the subject stays in place.",
     fixture: "wordmark source with the idle field on",
     id: "field.motion",
     kind: "control",
-    optionCoverage: ["still", "shimmer", "drift", "rain", "wave"],
+    optionCoverage: ["still", "shimmer", "drift", "rain", "wave", "morph", "twinkle", "patches"],
     target: engineTargets.backdropMotion,
     userAction: "Select each Motion option and play the loop.",
   },
@@ -180,6 +210,21 @@ export const layerAcceptance: readonly ToolcraftComponentAcceptance[] = [
     kind: "control",
     target: engineTargets.burstOn,
     userAction: "Turn Burst effect on and play the loop.",
+  },
+  {
+    automated: true,
+    automatedTestName: "declares the burst particle selector",
+    browser: controlBrowser("browser: particle changes what the burst throws"),
+    componentType: "select",
+    evidence: "timeline-output",
+    expectedObservable:
+      "Glyphs throws the stroke characters; Dots, Dashes, Bars, Plus, Blocks, Rings and Boxes redraw every burst cell as that particle, with dashes and bars lying along their rays.",
+    fixture: "wordmark source with the burst on",
+    id: "burst.particle",
+    kind: "control",
+    optionCoverage: "each-visible-item",
+    target: "burst.particle",
+    userAction: "Select each Particle option and play the loop.",
   },
   {
     automated: true,
@@ -281,6 +326,21 @@ export const layerAcceptance: readonly ToolcraftComponentAcceptance[] = [
     kind: "control",
     target: engineTargets.swirlOn,
     userAction: "Turn Swirl effect on and play the loop.",
+  },
+  {
+    automated: true,
+    automatedTestName: "declares the swirl particle selector",
+    browser: controlBrowser("browser: particle changes what orbits"),
+    componentType: "select",
+    evidence: "timeline-output",
+    expectedObservable:
+      "Glyphs orbits the stream characters; Dots, Dashes, Bars, Plus, Blocks, Rings and Boxes orbit that particle instead, with dashes and bars turning along the orbit.",
+    fixture: "wordmark source with the swirl on",
+    id: "swirl.particle",
+    kind: "control",
+    optionCoverage: "each-visible-item",
+    target: "swirl.particle",
+    userAction: "Select each Particle option and play the loop.",
   },
   {
     automated: true,

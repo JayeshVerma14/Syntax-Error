@@ -35,6 +35,6 @@ describe("CRT pass", () => {
       "crt.spacing": 0,
       "crt.strength": -5,
     });
-    expect(crt).toEqual({ band: 100, enabled: true, passes: 4, spacing: 2, strength: 0 });
+    expect(crt).toEqual({ band: 100, enabled: true, grain: 0, passes: 4, spacing: 2, strength: 0 });
   });
 });

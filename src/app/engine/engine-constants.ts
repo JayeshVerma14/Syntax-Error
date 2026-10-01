@@ -74,6 +74,8 @@ export const MARK_OPTIONS = [
   { label: "Star", value: "star" },
   { label: "Checker", value: "checker" },
   { label: "Seal", value: "seal" },
+  { label: "Bracket", value: "bracket" },
+  { label: "Box dot", value: "boxdot" },
   { label: "Glyph", value: "glyph" },
 ] as const;
 

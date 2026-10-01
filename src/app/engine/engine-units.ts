@@ -230,6 +230,23 @@ function fillMark(
       context.fillRect(-half, -half, half, half);
       context.fillRect(0, 0, half, half);
       return;
+    case "bracket": {
+      // A corner bracket opening down-right; turn it for the other corners.
+      const thickness = Math.max(1, size * 0.14);
+      context.fillRect(-half, -half, size, thickness);
+      context.fillRect(-half, -half, thickness, size);
+      return;
+    }
+    case "boxdot": {
+      // A solid square with a dot punched out of its middle.
+      context.fillRect(-half, -half, size, size);
+      if (context.globalCompositeOperation === "destination-out") return;
+      context.globalCompositeOperation = "destination-out";
+      const dot = Math.max(1, size * 0.3);
+      context.fillRect(-dot / 2, -dot / 2, dot, dot);
+      context.globalCompositeOperation = "source-over";
+      return;
+    }
     case "seal": {
       // A filled disc with an asterisk punched out of it.
       context.beginPath();
@@ -252,6 +269,82 @@ function fillMark(
       context.fillText(glyph, 0, 0);
       return;
     }
+  }
+}
+
+/**
+ * Draws an upright geometric mark centred on (x, y) without a transform, for
+ * the common case of many small unrotated marks such as the idle field. The
+ * caller sets the fill. Returns false for marks that need a transform, so the
+ * caller can fall back to `drawUnit`. `quarter` turns a corner bracket.
+ */
+export function fillMarkAt(
+  context: Paint2D,
+  shape: UnitMark,
+  x: number,
+  y: number,
+  size: number,
+  cell: number,
+  quarter: number,
+): boolean {
+  const half = size / 2;
+  switch (shape) {
+    case "circle":
+      context.beginPath();
+      context.arc(x, y, half, 0, Math.PI * 2);
+      context.fill();
+      return true;
+    case "square":
+      context.fillRect(x - half, y - half, size, size);
+      return true;
+    case "bar": {
+      const width = Math.max(1, cell * 0.34);
+      context.fillRect(x - width / 2, y - half, width, size);
+      return true;
+    }
+    case "dash": {
+      const height = Math.max(1, cell * 0.34);
+      context.fillRect(x - half, y - height / 2, size, height);
+      return true;
+    }
+    case "plus": {
+      const thickness = Math.max(1, size * 0.26);
+      context.fillRect(x - half, y - thickness / 2, size, thickness);
+      context.fillRect(x - thickness / 2, y - half, thickness, size);
+      return true;
+    }
+    case "checker":
+      context.fillRect(x - half, y - half, half, half);
+      context.fillRect(x, y, half, half);
+      return true;
+    case "bracket": {
+      const thickness = Math.max(1, size * 0.14);
+      const turn = ((quarter % 4) + 4) % 4;
+      // Arms along the top or bottom edge and the left or right edge.
+      const top = turn === 0 || turn === 1;
+      const left = turn === 0 || turn === 3;
+      context.fillRect(x - half, top ? y - half : y + half - thickness, size, thickness);
+      context.fillRect(left ? x - half : x + half - thickness, y - half, thickness, size);
+      return true;
+    }
+    case "boxdot": {
+      context.fillRect(x - half, y - half, size, size);
+      if (context.globalCompositeOperation === "destination-out") return true;
+      const dot = Math.max(1, size * 0.3);
+      context.globalCompositeOperation = "destination-out";
+      context.fillRect(x - dot / 2, y - dot / 2, dot, dot);
+      context.globalCompositeOperation = "source-over";
+      return true;
+    }
+    case "ring":
+      context.beginPath();
+      context.arc(x, y, half, 0, Math.PI * 2);
+      context.moveTo(x + half * 0.52, y);
+      context.arc(x, y, half * 0.52, 0, Math.PI * 2, true);
+      context.fill("evenodd");
+      return true;
+    default:
+      return false;
   }
 }
 
