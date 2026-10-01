@@ -28,6 +28,7 @@ import { codeSchedule } from "./engine-code";
 import { DATA_TEXT_TYPE, dataTextAfter, dataTextLength, readDataText } from "./engine-datatext";
 import { logoSchedule, readLogo } from "./engine-logo";
 import { readCodeRoll, readEndText } from "./engine-settings";
+import { formSchedule, readForm } from "./engine-form";
 import { readWall, WALL_TYPE, wallSchedule } from "./engine-wall";
 
 /** The runtime's accepted loop range. */
@@ -44,13 +45,15 @@ function selectSequenceSeconds(state: ToolcraftState): number | null {
   const code = readCodeRoll(state.values);
   const logo = readLogo(state.values);
   const wall = readWall(state.values, WALL_TYPE);
-  if (!code.enabled && !logo.enabled && !wall.enabled) return null;
+  const form = readForm(state.values);
+  if (!code.enabled && !logo.enabled && !wall.enabled && !form.enabled) return null;
   const sequence = codeSchedule(code, readEndText(state.values)).total;
   const plan = logoSchedule(logo, sequence);
   const dataText = readDataText(state.values, DATA_TEXT_TYPE);
   const data = dataTextLength(dataText, dataTextAfter(dataText, sequence, plan));
   const words = wallSchedule(wall, Math.max(sequence, plan?.end ?? 0))?.end ?? 0;
-  const total = Math.max(sequence, plan?.end ?? 0, data, words);
+  const picture = formSchedule(form, Math.max(sequence, plan?.end ?? 0))?.end ?? 0;
+  const total = Math.max(sequence, plan?.end ?? 0, data, words, picture);
   const clamped = Math.min(MAX_LOOP_SECONDS, Math.max(MIN_LOOP_SECONDS, total));
   return Math.round(clamped * 100) / 100;
 }

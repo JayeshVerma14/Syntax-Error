@@ -144,3 +144,8 @@ export const whenWall = {
   all: [{ equals: true, target: "wall.enabled" }],
   mode: "conditional",
 } as const;
+
+export const whenForm = {
+  all: [{ equals: true, target: "form.enabled" }],
+  mode: "conditional",
+} as const;

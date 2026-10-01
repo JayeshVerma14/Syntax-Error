@@ -43,6 +43,7 @@ import styles from "./product-canvas.module.css";
 import { useAudioPlayback } from "./use-audio-playback";
 import { useCodeLoopSync } from "./use-code-loop-sync";
 import { useKeyframeFocus } from "./use-keyframe-focus";
+import { useFormArt } from "./use-form-art";
 import { useLogoArt } from "./use-logo-art";
 import { useSong } from "./use-song";
 import { useVideoQualityPreset } from "./use-video-quality-preset";
@@ -300,6 +301,7 @@ export function ProductCanvas(): React.JSX.Element {
   const width = rect?.width ?? 0;
   const height = rect?.height ?? 0;
   const logo = useLogoArt(mediaAssets, presentationUrls, settings.logo, width, height);
+  const form = useFormArt(mediaAssets, presentationUrls, settings.form, width, height);
 
   // Decode only when the source or its frame changes. Cell size is not part of
   // this key: every grid density is averaged out of the same raster.
@@ -363,6 +365,7 @@ export function ProductCanvas(): React.JSX.Element {
       context,
       durationSeconds: timeline.durationSeconds,
       frame: { height, width, x: 0, y: 0 },
+      form,
       grid: currentGrid(),
       logo,
       progress: loopProgress,
@@ -381,6 +384,7 @@ export function ProductCanvas(): React.JSX.Element {
     if (context) paintFrame(context);
   }, [
     fontRevision,
+    form,
     height,
     logo,
     loopProgress,

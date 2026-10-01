@@ -21,6 +21,7 @@ import { fieldSection } from "./schema/schema-sections-field";
 import { barsSection, logoBuildSection, logoSection } from "./schema/schema-sections-overlays";
 import { dataTextSection, transitionSection } from "./schema/schema-sections-sequence";
 import { wallSection } from "./schema/schema-sections-wall";
+import { formSection } from "./schema/schema-sections-form";
 import { guidesSection } from "./schema/schema-sections-guides";
 import {
   backgroundSection,
@@ -77,6 +78,7 @@ export const appSchema = defineToolcraft({
           barsSection,
           dataTextSection,
           wallSection,
+          formSection,
           logoSection,
           logoBuildSection,
           transitionSection,

@@ -25,6 +25,7 @@ import type { EngineSettings } from "./engine-settings";
 import { drawTransition, transitionCuts } from "./engine-transition";
 import type { Paint2D } from "./engine-units";
 import type { BurstEvent } from "./engine-burst";
+import { drawForm, formCovers, formSchedule, type FormGrid, type FormSchedule } from "./engine-form";
 import { drawWall, wallBurstEvent, wallCovers, wallSchedule, type WallSchedule } from "./engine-wall";
 
 export type LogoFrame = Readonly<{ art: LogoArt; crisp: OffscreenCanvas | null }>;
@@ -46,6 +47,7 @@ export type SequencePlan = Readonly<{
   takesOver: boolean;
   /** Length of everything on the sequence clock. */
   total: number;
+  form: FormSchedule | null;
   wall: WallSchedule | null;
   /** The Burst explosion the word wall fires at this frame, if any. */
   wallBurst: BurstEvent | null;
@@ -62,7 +64,8 @@ export function sequenceTotal(settings: EngineSettings): number {
   const logo = logoSchedule(settings.logo, schedule.total);
   const dataAfter = dataTextAfter(settings.dataText, schedule.total, logo);
   const wall = wallSchedule(settings.wall, wallAfter(schedule.total, logo));
-  return Math.max(schedule.total, logo?.end ?? 0, dataTextLength(settings.dataText, dataAfter), wall?.end ?? 0);
+  const form = formSchedule(settings.form, wallAfter(schedule.total, logo));
+  return Math.max(schedule.total, logo?.end ?? 0, dataTextLength(settings.dataText, dataAfter), wall?.end ?? 0, form?.end ?? 0);
 }
 
 /** Where the sequence stands at a loop position. */
@@ -81,6 +84,7 @@ export function planSequence(
   const rate = durationSeconds > 0 && loop > durationSeconds ? loop / durationSeconds : 1;
   const dataAfter = dataTextAfter(settings.dataText, schedule.total, logo);
   const wall = wallSchedule(settings.wall, wallAfter(schedule.total, logo));
+  const form = formSchedule(settings.form, wallAfter(schedule.total, logo));
   const data = settings.dataText.enabled ? planDataText(settings.dataText, loop, dataAfter) : null;
   return {
     cuts: transitionCuts(schedule, logo?.start ?? null, {
@@ -95,7 +99,8 @@ export function planSequence(
     loop,
     real: durationSeconds > 0 ? durationSeconds : loop,
     schedule,
-    takesOver: codeTakesOver(settings.code, schedule, time) || wallCovers(settings.wall, wall, time),
+    takesOver: codeTakesOver(settings.code, schedule, time) || wallCovers(settings.wall, wall, time) || formCovers(settings.form, form, time),
+    form,
     time,
     total,
     wall,
@@ -113,7 +118,7 @@ export function paintSequence(
   settings: EngineSettings,
   plan: SequencePlan,
   logo: LogoFrame | undefined,
-  timing: Readonly<{ durationSeconds: number; progress: number; pulse: AudioPulse; swell: number }>,
+  timing: Readonly<{ durationSeconds: number; form?: FormGrid; progress: number; pulse: AudioPulse; swell: number }>,
 ): void {
   const { swell } = timing;
   if (swell !== 1) {
@@ -127,6 +132,7 @@ export function paintSequence(
   drawDataText(context, frame, settings.dataText, plan.time, plan.loop, plan.dataAfter, timing.pulse);
   drawBars(context, frame, settings.bars, timing.durationSeconds, timing.progress, timing.pulse.beat);
   drawLogo(context, frame, settings.logo, logo?.art ?? null, logo?.crisp ?? null, plan.logo, plan.time, timing.pulse);
+  drawForm(context, settings.form, timing.form, plan.form, plan.time);
   drawWall(context, frame, settings.wall, plan.wall, plan.time);
   if (swell !== 1) context.restore();
 }

@@ -9,6 +9,7 @@ import { logoTargets } from "../engine/engine-logo";
 import { engineTargets } from "../engine/engine-settings";
 import { transitionTargets } from "../engine/engine-transition";
 import { wallTargets } from "../engine/engine-wall";
+import { formTargets } from "../engine/engine-form";
 
 export const codeInventory = [
   {
@@ -251,6 +252,56 @@ export const codeInventory = [
       wallTargets.blast,
     ],
     title: "Word wall",
+  },
+  {
+    entity: "Image form",
+    entityId: "form",
+    finiteSelectors: [
+      {
+        affectedTargets: [],
+        reason:
+          "The Form image switch decides whether the image form settings are usable; all ten are explicit applicability dependents.",
+        role: "branch",
+        target: formTargets.enabled,
+      },
+      {
+        reason: "Order changes which cells lock first without changing which other controls apply.",
+        role: "parameter",
+        target: formTargets.order,
+      },
+      {
+        reason: "Starts moves the layer in time without changing which other controls apply.",
+        role: "parameter",
+        target: formTargets.timing,
+      },
+      {
+        reason: "Invert flips which tones form without changing which other controls apply.",
+        role: "parameter",
+        target: formTargets.invert,
+      },
+      {
+        reason: "Clear sheet hides the halftone without changing which other controls apply.",
+        role: "parameter",
+        target: formTargets.cover,
+      },
+    ],
+    groupingReason:
+      "One entity: the uploaded picture that forms out of glyphs, its order, timing, glyph grid, size and ink. These reset together.",
+    id: "form",
+    targets: [
+      formTargets.enabled,
+      formTargets.file,
+      formTargets.order,
+      formTargets.timing,
+      formTargets.duration,
+      formTargets.hold,
+      formTargets.cell,
+      formTargets.size,
+      formTargets.ink,
+      formTargets.invert,
+      formTargets.cover,
+    ],
+    title: "Image form",
   },
   {
     entity: "Logo reveal",
