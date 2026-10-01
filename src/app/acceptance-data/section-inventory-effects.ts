@@ -204,7 +204,7 @@ export const codeInventory = [
       {
         affectedTargets: [],
         reason:
-          "The Show word wall switch decides whether the word wall settings are usable; all fourteen are explicit applicability dependents.",
+          "The Show word wall switch decides whether the word wall settings are usable; all fifteen are explicit applicability dependents.",
         role: "branch",
         target: wallTargets.enabled,
       },
@@ -212,6 +212,11 @@ export const codeInventory = [
         reason: "Starts moves the wall in time without changing which other controls apply.",
         role: "parameter",
         target: wallTargets.timing,
+      },
+      {
+        reason: "Arrival changes how words land without changing which other controls apply.",
+        role: "parameter",
+        target: wallTargets.entry,
       },
       {
         reason: "Clear sheet hides the halftone without changing which other controls apply.",
@@ -232,6 +237,7 @@ export const codeInventory = [
       wallTargets.text,
       wallTargets.type,
       wallTargets.timing,
+      wallTargets.entry,
       wallTargets.duration,
       wallTargets.hero,
       wallTargets.land,
