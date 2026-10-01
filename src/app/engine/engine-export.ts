@@ -19,16 +19,19 @@ import {
   type AudioFrame,
 } from "./engine-audio";
 import { awaitSong, sliceSong } from "./engine-audio-io";
+import { barLines } from "./engine-bars";
 import { LOOP_SECONDS } from "./engine-constants";
+import { logoTargets } from "./engine-logo";
+import { prepareLogoFrame } from "./engine-logo-art";
 import { waitForFont } from "./engine-fonts";
 import { findSourceAsset, resolveSourceRaster } from "./engine-grid";
-import { renderSyntaxErrorFrame, resolveGridShape } from "./engine-render";
+import { renderSyntaxErrorFrame, resolveGridShape, type LogoFrame } from "./engine-render";
 import {
   readEngineSettings,
   sourceTargetFor,
   type EngineSettings,
 } from "./engine-settings";
-import { gridFromRaster } from "./engine-source";
+import { awaitStillSource, gridFromRaster } from "./engine-source";
 
 /** How long an export waits for a freshly chosen caption typeface. */
 const EXPORT_FONT_WAIT_MS = 3000;
@@ -103,6 +106,22 @@ function resolveSongId(state: StateLike, settings: EngineSettings): string | nul
   return findSourceAsset(state.mediaAssets, audioTargets.file)?.id ?? null;
 }
 
+/** The uploaded logo prepared for an exported frame, while the logo is on. */
+function logoAt(
+  state: StateLike,
+  settings: EngineSettings,
+  frameWidth: number,
+  frameHeight: number,
+): Promise<LogoFrame | undefined> {
+  const id = settings.logo.enabled
+    ? findSourceAsset(state.mediaAssets, logoTargets.file)?.id
+    : undefined;
+  if (!id) return Promise.resolve(undefined);
+  return awaitStillSource(id).then((image) =>
+    image ? (prepareLogoFrame(id, image, settings.logo, frameWidth, frameHeight) ?? undefined) : undefined,
+  );
+}
+
 /** The music at an exported frame's song moment. */
 async function soundAt(
   state: StateLike,
@@ -158,10 +177,11 @@ export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
     const shape = resolveGridShape(settings, frame.width, frame.height);
     const grid = raster ? gridFromRaster(raster, shape.cols, shape.rows) : null;
     const sound = await soundAt(stateLike, settings, timeSeconds);
+    const logo = await logoAt(stateLike, settings, frame.width, frame.height);
     signal.throwIfAborted();
     // Backdrop, burst, swirl, caption and the code roll still draw without a
     // sampled source; each text layer waits for its chosen face.
-    for (const block of [settings.caption, settings.code, settings.endText]) {
+    for (const block of textLayers(settings)) {
       if (block.enabled && block.text.trim().length > 0) {
         await waitForFont(block.type, EXPORT_FONT_WAIT_MS);
         signal.throwIfAborted();
@@ -187,6 +207,7 @@ export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
       },
       durationSeconds: readLoopSeconds(state),
       grid,
+      logo,
       progress: readLoopProgress(state),
       settings,
       sound,
@@ -199,6 +220,27 @@ export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
     }
   },
 };
+
+/** Every text layer, as its switch, its words and its face. */
+function textLayers(
+  settings: EngineSettings,
+): readonly Readonly<{ enabled: boolean; text: string; type: EngineSettings["caption"]["type"] }>[] {
+  return [
+    settings.caption,
+    settings.code,
+    settings.endText,
+    {
+      enabled: settings.bars.enabled,
+      text: barLines(settings.bars).map((item) => item.text).join(" "),
+      type: settings.bars.type,
+    },
+    {
+      enabled: settings.dataText.enabled,
+      text: settings.dataText.items.map((item) => item.text).join(" "),
+      type: settings.dataText.type,
+    },
+  ];
+}
 
 /** Timeline loop length for the export, so code-roll phases keep their seconds. */
 function readLoopSeconds(state: unknown): number {

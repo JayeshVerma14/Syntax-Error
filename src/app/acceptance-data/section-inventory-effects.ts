@@ -1,9 +1,13 @@
-/** Section grouping decisions for the code roll, end text, CRT and audio sections. */
+/** Section grouping decisions for the code roll, end text, text bars, data text, logo, transition, CRT and audio sections. */
 
 import type { ToolcraftControlSectionInventoryEntry } from "../acceptance/types";
 import { audioTargets } from "../engine/engine-audio";
+import { barTargets } from "../engine/engine-bars";
 import { crtTargets } from "../engine/engine-crt";
+import { dataTextTargets } from "../engine/engine-datatext";
+import { logoTargets } from "../engine/engine-logo";
 import { engineTargets } from "../engine/engine-settings";
+import { transitionTargets } from "../engine/engine-transition";
 
 export const codeInventory = [
   {
@@ -98,6 +102,238 @@ export const codeInventory = [
     ],
     title: "End text",
   },
+  {
+    entity: "Text bars",
+    entityId: "bars",
+    finiteSelectors: [
+      {
+        affectedTargets: [],
+        reason:
+          "The Show bars switch decides whether the bar settings are usable; all seven are explicit applicability dependents.",
+        role: "branch",
+        target: barTargets.enabled,
+      },
+      {
+        reason: "Style changes the bar's shape without changing which other controls apply.",
+        role: "parameter",
+        target: barTargets.style,
+      },
+    ],
+    groupingReason:
+      "One entity: the boxed labels that take turns through the frame, each with its own text and motion, their look and pacing. These reset together.",
+    id: "bars",
+    targets: [
+      barTargets.enabled,
+      barTargets.items,
+      barTargets.style,
+      barTargets.type,
+      barTargets.position,
+      barTargets.scatter,
+      barTargets.time,
+      barTargets.hold,
+    ],
+    title: "Text bars",
+  },
+  {
+    entity: "Data text",
+    entityId: "data",
+    finiteSelectors: [
+      {
+        affectedTargets: [],
+        reason:
+          "The Show data text switch decides whether the data text settings are usable; all twelve are explicit applicability dependents.",
+        role: "branch",
+        target: dataTextTargets.enabled,
+      },
+      {
+        reason: "Reveal changes how items come on without changing which other controls apply.",
+        role: "parameter",
+        target: dataTextTargets.reveal,
+      },
+      {
+        reason: "Departure changes how items leave without changing which other controls apply.",
+        role: "parameter",
+        target: dataTextTargets.exit,
+      },
+      {
+        reason: "Starts moves the data text in time without changing which other controls apply.",
+        role: "parameter",
+        target: dataTextTargets.timing,
+      },
+      {
+        reason: "Tile block repeats the same labels without changing which other controls apply.",
+        role: "parameter",
+        target: dataTextTargets.repeat,
+      },
+      {
+        reason: "Markers draws its own squares without changing which other controls apply.",
+        role: "parameter",
+        target: dataTextTargets.markers,
+      },
+      {
+        reason: "Rules draws its own bars without changing which other controls apply.",
+        role: "parameter",
+        target: dataTextTargets.rules,
+      },
+    ],
+    groupingReason:
+      "One entity: the data labels placed around the frame, their typography, how they reveal and leave, their timing, and the markers and rules that frame them. These reset together.",
+    id: "data",
+    targets: [
+      dataTextTargets.enabled,
+      dataTextTargets.items,
+      dataTextTargets.type,
+      dataTextTargets.reveal,
+      dataTextTargets.exit,
+      dataTextTargets.timing,
+      dataTextTargets.start,
+      dataTextTargets.stagger,
+      dataTextTargets.hold,
+      dataTextTargets.repeat,
+      dataTextTargets.box,
+      dataTextTargets.markers,
+      dataTextTargets.rules,
+    ],
+    title: "Data text",
+  },
+  {
+    entity: "Logo reveal",
+    entityId: "logo",
+    finiteSelectors: [
+      {
+        affectedTargets: [],
+        reason:
+          "The Reveal logo switch decides whether the logo settings are usable; all twelve are explicit applicability dependents.",
+        role: "branch",
+        target: logoTargets.enabled,
+      },
+      {
+        reason: "Departure changes how the logo leaves without changing which other controls apply.",
+        role: "parameter",
+        target: logoTargets.exit,
+      },
+      {
+        reason: "Starts moves the reveal in time without changing which other controls apply.",
+        role: "parameter",
+        target: logoTargets.timing,
+      },
+      {
+        affectedTargets: [],
+        reason: "Tint decides whether Ink is usable; it is an explicit applicability dependent.",
+        role: "branch",
+        target: logoTargets.tint,
+      },
+      {
+        reason: "The HUD draws its own frame without changing which other controls apply.",
+        role: "parameter",
+        target: logoTargets.hud,
+      },
+    ],
+    groupingReason:
+      "One entity: the uploaded logo, how it assembles and leaves, its timing, size, grain, colour and HUD. These reset together.",
+    id: "logo",
+    targets: [
+      logoTargets.enabled,
+      logoTargets.file,
+      logoTargets.exit,
+      logoTargets.timing,
+      logoTargets.delay,
+      logoTargets.build,
+      logoTargets.hold,
+      logoTargets.size,
+      logoTargets.position,
+      logoTargets.block,
+      logoTargets.tint,
+      logoTargets.ink,
+      logoTargets.hud,
+    ],
+    title: "Logo reveal",
+  },
+  {
+    entity: "Logo build",
+    entityId: "logo-build",
+    finiteSelectors: [
+      {
+        affectedTargets: [],
+        reason:
+          "Assembly decides which build settings are usable; the cinematic and dot matrix settings are explicit applicability dependents.",
+        role: "branch",
+        target: logoTargets.style,
+      },
+      { reason: "Camera changes the shot list without changing which other controls apply.", role: "parameter", target: logoTargets.camera },
+      { reason: "Pieces changes how the logo is cut up without changing which other controls apply.", role: "parameter", target: logoTargets.parts },
+      { reason: "Particles changes what the build is made of without changing which other controls apply.", role: "parameter", target: logoTargets.particle },
+      { reason: "Floor grid draws its own floor without changing which other controls apply.", role: "parameter", target: logoTargets.floor },
+      { reason: "Debris draws its own streaks without changing which other controls apply.", role: "parameter", target: logoTargets.streaks },
+    ],
+    groupingReason:
+      "One entity: how the logo assembles, its 3D camera, depth, impacts, pieces, particles, floor and debris. These reset together.",
+    id: "logo-build",
+    targets: [
+      logoTargets.style,
+      logoTargets.camera,
+      logoTargets.swing,
+      logoTargets.depth,
+      logoTargets.impact,
+      logoTargets.parts,
+      logoTargets.particle,
+      logoTargets.floor,
+      logoTargets.streaks,
+    ],
+    title: "Logo build",
+  },
+  {
+    entity: "Transition",
+    entityId: "transition",
+    finiteSelectors: [
+      {
+        affectedTargets: [],
+        reason:
+          "The Glitch filler switch decides whether the filler settings are usable; all eleven are explicit applicability dependents.",
+        role: "branch",
+        target: transitionTargets.enabled,
+      },
+      {
+        reason: "Style changes how the filler looks without changing which other controls apply.",
+        role: "parameter",
+        target: transitionTargets.style,
+      },
+      {
+        affectedTargets: [],
+        reason: "Placement decides whether Beat threshold is usable; it is an explicit applicability dependent.",
+        role: "branch",
+        target: transitionTargets.placement,
+      },
+      {
+        reason: "Direction turns the filler without changing which other controls apply.",
+        role: "parameter",
+        target: transitionTargets.direction,
+      },
+      {
+        reason: "Blocks sets the filler's pixel size without changing which other controls apply.",
+        role: "parameter",
+        target: transitionTargets.blocks,
+      },
+    ],
+    groupingReason:
+      "One entity: the glitch filler that hides cuts, where it plays, how it looks, moves and holds, and its colours. These reset together.",
+    id: "transition",
+    targets: [
+      transitionTargets.enabled,
+      transitionTargets.style,
+      transitionTargets.placement,
+      transitionTargets.threshold,
+      transitionTargets.direction,
+      transitionTargets.duration,
+      transitionTargets.hold,
+      transitionTargets.intensity,
+      transitionTargets.blocks,
+      transitionTargets.color,
+      transitionTargets.fill,
+      transitionTargets.cover,
+    ],
+    title: "Transition",
+  },
 ] as const satisfies readonly ToolcraftControlSectionInventoryEntry[];
 
 export const crtInventory = [
@@ -108,7 +344,7 @@ export const crtInventory = [
       {
         affectedTargets: [],
         reason:
-          "The CRT effect switch decides whether the CRT settings are usable; all four are explicit applicability dependents.",
+          "The CRT effect switch decides whether the CRT settings are usable; all five are explicit applicability dependents.",
         role: "branch",
         target: crtTargets.enabled,
       },
@@ -119,13 +355,14 @@ export const crtInventory = [
       },
     ],
     groupingReason:
-      "One entity: the monitor pass over the finished frame, its scanlines and its rolling band of light. These reset together.",
+      "One entity: the monitor pass over the finished frame, its scanlines, its rolling band of light and its grain. These reset together.",
     id: "crt",
     targets: [
       crtTargets.enabled,
       crtTargets.strength,
       crtTargets.spacing,
       crtTargets.band,
+      crtTargets.grain,
       crtTargets.passes,
     ],
     title: "CRT",
@@ -140,7 +377,7 @@ export const audioInventory = [
       {
         affectedTargets: [],
         reason:
-          "The Audio reactive switch decides whether the audio settings are usable; all eight are explicit applicability dependents.",
+          "The Audio reactive switch decides whether the audio settings are usable; all eleven are explicit applicability dependents.",
         role: "branch",
         target: audioTargets.enabled,
       },
@@ -154,6 +391,16 @@ export const audioInventory = [
         role: "parameter",
         target: audioTargets.glitchOnBeat,
       },
+      {
+        reason: "Beat flash changes what a hard beat does without changing which other controls apply.",
+        role: "parameter",
+        target: audioTargets.flashOnBeat,
+      },
+      {
+        reason: "Beat shake changes what a hard beat does without changing which other controls apply.",
+        role: "parameter",
+        target: audioTargets.shakeOnBeat,
+      },
     ],
     groupingReason:
       "One entity: the song that drives the picture, the segment a clip covers, how strongly it reacts and which effects its beats fire. These reset together.",
@@ -166,8 +413,11 @@ export const audioInventory = [
       audioTargets.sensitivity,
       audioTargets.pulse,
       audioTargets.levels,
+      audioTargets.zoom,
       audioTargets.burstOnBeat,
       audioTargets.glitchOnBeat,
+      audioTargets.flashOnBeat,
+      audioTargets.shakeOnBeat,
     ],
     title: "Audio",
   },

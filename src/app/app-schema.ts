@@ -18,6 +18,8 @@ import { audioSection } from "./schema/schema-sections-audio";
 import { codeRollSection, endTextSection } from "./schema/schema-sections-code";
 import { crtSection } from "./schema/schema-sections-crt";
 import { fieldSection } from "./schema/schema-sections-field";
+import { barsSection, logoBuildSection, logoSection } from "./schema/schema-sections-overlays";
+import { dataTextSection, transitionSection } from "./schema/schema-sections-sequence";
 import { guidesSection } from "./schema/schema-sections-guides";
 import {
   backgroundSection,
@@ -71,6 +73,11 @@ export const appSchema = defineToolcraft({
           captionSection,
           codeRollSection,
           endTextSection,
+          barsSection,
+          dataTextSection,
+          logoSection,
+          logoBuildSection,
+          transitionSection,
           cameraSection,
           glitchSection,
           crtSection,

@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * The timeline length follows the code roll.
+ * The timeline length follows the code roll, the logo reveal, and the data
+ * text when it runs on their clock.
  *
  * The roll's phases are authored in seconds, so the loop is set to their sum
  * whenever the user changes one of them, turns the roll on, or opens a
@@ -24,6 +25,8 @@ import {
 } from "@/toolcraft/runtime/react";
 
 import { codeSchedule } from "./engine-code";
+import { DATA_TEXT_TYPE, dataTextAfter, dataTextLength, readDataText } from "./engine-datatext";
+import { logoSchedule, readLogo } from "./engine-logo";
 import { readCodeRoll, readEndText } from "./engine-settings";
 
 /** The runtime's accepted loop range. */
@@ -31,11 +34,20 @@ const MIN_LOOP_SECONDS = 1;
 const MAX_LOOP_SECONDS = 60;
 const SETTLE_MS = 350;
 
-/** The sequence length the loop should have, or null while the roll is off. */
+/**
+ * The sequence length the loop should have, or null while neither the code
+ * roll nor the logo is on. The logo's build, hold and exit count too, and so
+ * does the data text while it is on.
+ */
 function selectSequenceSeconds(state: ToolcraftState): number | null {
   const code = readCodeRoll(state.values);
-  if (!code.enabled) return null;
-  const total = codeSchedule(code, readEndText(state.values)).total;
+  const logo = readLogo(state.values);
+  if (!code.enabled && !logo.enabled) return null;
+  const sequence = codeSchedule(code, readEndText(state.values)).total;
+  const plan = logoSchedule(logo, sequence);
+  const dataText = readDataText(state.values, DATA_TEXT_TYPE);
+  const data = dataTextLength(dataText, dataTextAfter(dataText, sequence, plan));
+  const total = Math.max(sequence, plan?.end ?? 0, data);
   const clamped = Math.min(MAX_LOOP_SECONDS, Math.max(MIN_LOOP_SECONDS, total));
   return Math.round(clamped * 100) / 100;
 }

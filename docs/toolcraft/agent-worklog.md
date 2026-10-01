@@ -4,7 +4,7 @@
 
 Mode: product
 
-Active change: syntax-error-013
+Active change: syntax-error-015
 
 Syntax Error builds halftone and glyph-film branding assets: a source is sampled onto a grid and every cell is redrawn as a repeated unit — a disc, square, star, seal, bar, or any typed glyph set on a monospace character grid — coloured from an editable brand ink list, then optionally surrounded by an idle field, bursts, swirls and typed captions, posed in perspective, glitched, and animated as a seamless loop.
 
@@ -243,6 +243,42 @@ Syntax Error builds halftone and glyph-film branding assets: a source is sampled
 - Performance intent: ordinary-product-work
 - Verification: `npx tsc -p tsconfig.json --noEmit` passes; the engine tests pass, including analysis of a synthetic 120 BPM track, band placement, sensitivity, segment naming and the reaction mapping. In Google Chrome, an uploaded MP3 played with the timeline and re-cued only at each loop point; an MP4 export was named after its segment and carried H.264 video with AAC stereo audio whose kicks fall every half second, matching the song.
 - Risks: Risk: Four framework files are overridden; regenerating or upgrading Toolcraft would drop the soundtrack and the segment file names. Risk: The preview player may start a moment late after the first press of Play, because browsers hold audio until a user gesture. Risk: A very long song is decoded and analysed on the main thread once, which pauses the page briefly.
+
+### syntax-error-014 — Text bars and logo reveal
+
+- Request: "there some text bar (caption text) coming from right/left direction, staying there on screen and then going back in rotating manner or any other animated way, I'll give a logo it is main thing, so it should actually be assembled like bits and pieces with blocks giving proper tech vibe, I can't write much but bring your creativity here", then "find other good inspiration also other that references I have put".
+- Task type: Feature addition — two control sections, a text-bar renderer and a block-assembly logo renderer.
+- User-visible result: A Text bars section (Text bars, Bars, Entrance, Departure, Style, Font, Position, Scatter, Bar time, Hold): boxed labels take turns through the loop, sliding in from a side, assembling from blocks or decoding as the box grows, holding, then spinning, flipping, sliding back, shattering or switching off. A Logo reveal section (Logo reveal, Logo, Assembly, Departure, Starts, Delay, Build time, Hold, Size, Position, Block size, Tint, Ink, HUD): an uploaded PNG, JPG, WebP or SVG logo assembles out of blocks in one of seven ways, locks into its crisp form with a flash and holds, with an optional HUD of corner brackets, a counter, a striped progress bar and a status line.
+- Source/reference checked: The user's latest clip was read again at eight frames per second where its boxed labels appear: labels decode inside a box that grows, and a boxed label assembles from small box fragments flying together. Beyond it, public references were reviewed for block-built logo reveals, Ryoji Ikeda's datamatics and test pattern barcode data strips, pixel sorting and slit-scan, HUD boot sequences with corner brackets, counters and striped bars, and modular capsule identity systems.
+- Reference inputs: None registered; the list stays empty for the reasons recorded in syntax-error-001.
+- Docs/contracts read: `core/media-upload.md` for fileDrop lifecycle coverage; `component-rules.md` for segmented budgets, selects and colour controls.
+- Contract rules applied: `controls-product-coverage` — every added control declares applicability and a performance role; each section is gated by its switch, and Ink by Tint. Media upload coverage — the Logo fileDrop proves upload, remove and reset. Bars fit whole slots into the loop, so every loop closes on an empty frame.
+- View interaction intent: `fixed-camera`, unchanged.
+- Interaction ownership: Empty, unchanged.
+- Decision: `src/app/engine/engine-bars.ts` draws one bar per slot of the loop from pure functions of loop time. `engine-logo-art.ts` cuts the logo into a block grid once per logo and block count, by alpha or, for an opaque logo, against its corner colour, and keeps a crisp copy that is tinted on demand. `engine-logo.ts` stages each block by a per-style order and path, crossfades to the crisp copy when the build completes, and draws the HUD. The logo runs on the code-roll sequence clock, so After starts it once the code roll and end text finish, and the timeline length follows the whole reveal. Both layers draw above the sheet on both render paths and swell with the music's beat pulse.
+- Alternatives rejected: Reusing the Caption section for the bars — rejected because a bar has its own motion and slots. Drawing the finished logo as blocks only — rejected because the logo must read crisply once assembled. A workload role for Block size — deferred; the block count is bounded at 200 across.
+- State/output mapping: `bars.enabled` gates the bar settings; `bars.text` lists the bars; `bars.enter`, `bars.exit` and `bars.style` shape their motion and look; `bars.position` and `bars.scatter` place them; `bars.time` and `bars.hold` pace them. `logo.enabled` gates the logo settings; `logo.file` is the logo; `logo.style` and `logo.exit` choose its build and departure; `logo.timing`, `logo.delay`, `logo.build` and `logo.hold` time it; `logo.size`, `logo.position` and `logo.block` size it; `logo.tint` gates `logo.ink`; `logo.hud` draws the HUD.
+- Performance intent: ordinary-product-work
+- Verification: `npx tsc -p tsconfig.json --noEmit` passes; the engine tests pass, including the new logo timing and bar bounds checks. Every assembly style, departure and bar entrance and departure was rendered through the shared frame renderer in Google Chrome and inspected.
+- Risks: Risk: Tint turns a logo into a one-ink silhouette, so its inner detail shows only with Tint off. Risk: A very small block size on a large logo draws many blocks per frame; the grid is capped at 200 blocks across.
+
+### syntax-error-015 — Particles, per-bar motion, data text, cinematic logo, fillers and wider audio reaction
+
+- Request: "use different paricles for motion like glyphs circle bar dash and it should be controllable", effect references for a dot matrix, morphing cells and a targeting grid, "a filler like glitch between the shot", "the logo reveal should be grand not just a slideshow like reveal, integrating different parts together making it grand, different camera angles", the SanDisk film's red text "different text at different places", "it should have an option of disappear like bullet horizontally, also I should be able to select differnt motion for different text", then "try to make it audio reactive other than just burst and glitch".
+- Task type: Feature addition — particle vocabulary, three new sections and a reworked bar list.
+- User-visible result: Field gains Particle, Particle size and the Morph, Twinkle and Patches motions; Burst and Swirl gain Particle; Shape gains Bracket and Box dot; CRT gains Grain. Text bars become a list where each bar has its own text, entrance and departure, with Bullet, Glitch and Decode moves. New Data text, Logo build and Transition sections; Assembly defaults to Cinematic. Audio gains Beat zoom, Beat flash and Beat shake, and beats now drive the knockout, unit motion, field particles, grain, bars, logo, data text and fillers.
+- Source/reference checked: The new stills and loops were studied closely, and so were the opening seconds of the SanDisk film.
+- Reference inputs: None registered; the list stays empty for the reasons recorded in syntax-error-001.
+- Docs/contracts read: `component-rules.md` for segmented budgets and compound collection items.
+- Contract rules applied: `controls-product-coverage` — every added control declares applicability and a performance role; Logo build is gated by Assembly in its own section; colour pairs declare a semantic group.
+- View interaction intent: `fixed-camera`, unchanged.
+- Interaction ownership: Empty, unchanged.
+- Decision: The timed layers moved to `engine-sequence.ts`, which plans the sequence clock, the cuts between scenes and the data text's start; `engine-screen.ts` applies a beat's punch and flash; `engine-audio-pulse.ts` is the one music value every timed layer reads. Bars and data items are compound collections so each item carries its own motion or place.
+- Alternatives rejected: Inline tags in bar text for per-bar motion — rejected as too hard to type. A global camera move for the logo — rejected because the cinematic shots belong to the logo alone.
+- State/output mapping: `field.particle`, `field.size`, `burst.particle`, `swirl.particle`, `crt.grain`, `bars.items`, `data.*`, `logo.camera`, `logo.swing`, `logo.depth`, `logo.impact`, `logo.parts`, `logo.particle`, `logo.floor`, `logo.streaks`, `transition.*`, `audio.zoom`, `audio.flashOnBeat`, `audio.shakeOnBeat`.
+- Performance intent: ordinary-product-work
+- Verification: `npx tsc -p tsconfig.json --noEmit` passes; the engine and acceptance tests pass apart from the four known environment failures. Every new layer was rendered through the shared frame renderer in Google Chrome and inspected, and the live app was checked with a logo upload.
+- Risks: Risk: With the logo set to Stay, the default data text layout overlaps it. Risk: The Slice filler copies the frame each frame it is on screen, about 9 ms at 4K.
 
 ## Decisions
 

@@ -15,17 +15,22 @@ export const audioTargets = {
   burstOnBeat: "audio.burstOnBeat",
   enabled: "audio.enabled",
   file: "audio.file",
+  flashOnBeat: "audio.flashOnBeat",
   glitchOnBeat: "audio.glitchOnBeat",
   levels: "audio.levels",
   pulse: "audio.pulse",
   sensitivity: "audio.sensitivity",
+  shakeOnBeat: "audio.shakeOnBeat",
   start: "audio.start",
   volume: "audio.volume",
+  zoom: "audio.zoom",
 } as const;
 
 export type AudioSettings = Readonly<{
   burstOnBeat: boolean;
   enabled: boolean;
+  /** Strong beats flash the frame white. */
+  flashOnBeat: boolean;
   glitchOnBeat: boolean;
   /** 0..100: how strongly bass, mids and highs drive the picture. */
   levels: number;
@@ -33,10 +38,14 @@ export type AudioSettings = Readonly<{
   pulse: number;
   /** 25..300: gain on the analysed music. */
   sensitivity: number;
+  /** Strong beats shake the picture. */
+  shakeOnBeat: boolean;
   /** Song second the clip starts at. */
   start: number;
   /** 0..100: loudness in preview and export. */
   volume: number;
+  /** 0..100: how far each beat punches the picture in. */
+  zoom: number;
 }>;
 
 export const MAX_SONG_START_SECONDS = 600;
@@ -48,12 +57,15 @@ export function readAudio(values: Values): AudioSettings {
   return {
     burstOnBeat: readBoolean(values, audioTargets.burstOnBeat, false),
     enabled: readBoolean(values, audioTargets.enabled, false),
+    flashOnBeat: readBoolean(values, audioTargets.flashOnBeat, false),
     glitchOnBeat: readBoolean(values, audioTargets.glitchOnBeat, false),
     levels: clamp(readNumber(values, audioTargets.levels, 40), 0, 100),
     pulse: clamp(readNumber(values, audioTargets.pulse, 40), 0, 100),
     sensitivity: clamp(readNumber(values, audioTargets.sensitivity, 100), 25, 300),
+    shakeOnBeat: readBoolean(values, audioTargets.shakeOnBeat, false),
     start: clamp(readNumber(values, audioTargets.start, 0), 0, MAX_SONG_START_SECONDS),
     volume: clamp(readNumber(values, audioTargets.volume, 80), 0, 100),
+    zoom: clamp(readNumber(values, audioTargets.zoom, 0), 0, 100),
   };
 }
 

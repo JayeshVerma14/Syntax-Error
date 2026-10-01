@@ -25,13 +25,6 @@ import { dilateMask } from "./engine-backdrop";
 import { collectBurst } from "./engine-burst";
 import { createProjector } from "./engine-camera";
 import { drawCaption } from "./engine-caption";
-import {
-  codeSchedule,
-  codeTakesOver,
-  drawCodeRoll,
-  drawEndText,
-  sequenceTime,
-} from "./engine-code";
 import { drawCrt } from "./engine-crt";
 import { createFieldSampler } from "./engine-field";
 import { createGlitchPlan } from "./engine-glitch";
@@ -41,9 +34,23 @@ import type { EngineSettings } from "./engine-settings";
 import { toGreyscale, unitColor, type PaletteChoice } from "./engine-palette";
 import type { SourceGrid } from "./engine-source";
 import { quantizeGrid } from "./engine-quantize";
+import { applyHit, drawFlash } from "./engine-screen";
+import {
+  paintSequence as paintTimedLayers,
+  paintTransition,
+  planSequence,
+  type LogoFrame,
+} from "./engine-sequence";
 import { collectSwirl } from "./engine-swirl";
 import { buildToneField } from "./engine-tone";
-import { drawKnockout, drawUnit, type Paint2D, resolveShape } from "./engine-units";
+import {
+  createParticlePicker,
+  layerParticleMark,
+  layerParticleSize,
+  strokeHeading,
+  strokeWeight,
+} from "./engine-particles";
+import { drawKnockout, drawUnit, fillMarkAt, type Paint2D, resolveShape } from "./engine-units";
 
 export type FrameRect = Readonly<{
   height: number;
@@ -103,9 +110,13 @@ export type RenderFrameInput = Readonly<{
   /** Forward loop progress in 0..1. Stills pass 0. */
   progress: number;
   settings: EngineSettings;
+  /** The uploaded logo, prepared as blocks and a crisp copy. */
+  logo?: LogoFrame;
   /** The music at this frame's song moment, when Audio reactive is on. */
   sound?: AudioFrame;
 }>;
+
+export type { LogoFrame } from "./engine-sequence";
 
 type Mark = {
   angleRadians: number;
@@ -116,6 +127,8 @@ type Mark = {
   font: string;
   glyph: string;
   mark: UnitMark;
+  /** Quarter turns, for corner brackets in the field. */
+  quarter: number;
   size: number;
   squash: number;
   x: number;
@@ -128,6 +141,7 @@ export function renderSyntaxErrorFrame({
   frame,
   grid,
   progress,
+  logo,
   settings,
   sound,
 }: RenderFrameInput): void {
@@ -135,28 +149,29 @@ export function renderSyntaxErrorFrame({
   const reaction = reactToAudio(settings, sound);
   // The code roll and its end text run on sequence seconds. While the code is
   // on screen it takes over the canvas and nothing of the sheet is built.
-  const schedule = codeSchedule(settings.code, settings.endText);
-  const sequence = sequenceTime(progress, durationSeconds, schedule.total);
-  const paintSequence = () => {
-    // A beat swells the text about the frame centre.
-    const swell = reaction.textScale;
-    if (swell !== 1) {
-      context.save();
-      context.translate(frame.width / 2, frame.height / 2);
-      context.scale(swell, swell);
-      context.translate(-frame.width / 2, -frame.height / 2);
-    }
-    drawCodeRoll(context, frame, settings.code, schedule, sequence);
-    drawEndText(context, frame, settings.endText, schedule, sequence);
-    if (swell !== 1) context.restore();
+  const plan = planSequence(settings, progress, durationSeconds);
+  // A beat swells the text about the frame centre.
+  const timing = { durationSeconds, progress, pulse: reaction.pulse, swell: reaction.textScale };
+  const paintSequence = () => paintTimedLayers(context, frame, settings, plan, logo, timing);
+  // The CRT pass lies over the finished picture, whatever is on screen,
+  // and a beat's flash lies under it, over everything the beat moved.
+  // A beat's punch and shake move everything under the filler and CRT pass.
+  const moveScreen = () => applyHit(context, frame, reaction.hit);
+  // A glitch filler hides each cut; it is never zoomed or shaken.
+  const paintFiller = () => paintTransition(context, frame, settings, plan, reaction.pulse);
+  const paintScreen = () => {
+    drawFlash(context, frame, reaction.hit.flash);
+    drawCrt(context, frame, reaction.crt, progress, durationSeconds);
   };
-  // The CRT pass lies over the finished picture, whatever is on screen.
-  const paintCrt = () => drawCrt(context, frame, reaction.crt, progress);
-  if (codeTakesOver(settings.code, schedule, sequence)) {
+  if (plan.takesOver) {
     context.save();
     context.translate(frame.x, frame.y);
+    context.save();
+    moveScreen();
     paintSequence();
-    paintCrt();
+    context.restore();
+    paintFiller();
+    paintScreen();
     context.restore();
     return;
   }
@@ -180,7 +195,7 @@ export function renderSyntaxErrorFrame({
   const fixedGlyphs = glyphs.sizing === "fixed";
   // A fixed type size fills the line, as a terminal sets text in its cells.
   const fixedGlyphSize = isType ? cellHeight * 0.92 : Math.min(cellWidth, cellHeight) * 1.02;
-  const knockout = Math.min(1, Math.max(0, settings.knockout / 100));
+  const knockout = Math.min(1, Math.max(0, reaction.knockout / 100));
   // One step of the fixed-size ramp, which includes its empty step.
   const glyphStep = 1 / (settings.glyphs.length + 1);
   const boxHeight = cellHeight * (isType ? 0.9 : 1) * (1 - gap);
@@ -255,6 +270,7 @@ export function renderSyntaxErrorFrame({
     mark: UnitMark,
     glyph: string,
     size: number,
+    quarter = 0,
   ): Mark | null => {
     const projected = projector((column + 0.5) * cellWidth, (row + 0.5) * cellHeight);
     if (!projected.visible || projected.scale <= 0) return null;
@@ -267,6 +283,7 @@ export function renderSyntaxErrorFrame({
       font: mark === "glyph" ? glyphFont(size * projected.scale, glyphs.face, glyphs.bold) : "",
       glyph,
       mark,
+      quarter,
       size: size * projected.scale,
       squash: 1,
       x: projected.x,
@@ -284,8 +301,18 @@ export function renderSyntaxErrorFrame({
       reaction.burstEvents,
     )) {
       rays[cell.row * cols + cell.column] = 1;
-      const mark = gridMark(cell.column, cell.row, "glyph", cell.glyph, layerGlyphSize);
-      if (mark) burst.push(mark);
+      const kind = settings.burst.particle;
+      if (kind === "glyphs") {
+        const mark = gridMark(cell.column, cell.row, "glyph", cell.glyph, layerGlyphSize);
+        if (mark) burst.push(mark);
+        continue;
+      }
+      const size = layerGlyphSize * layerParticleSize(kind) * strokeWeight(cell.glyph);
+      const mark = gridMark(cell.column, cell.row, layerParticleMark(kind), "", size);
+      if (!mark) continue;
+      // Dashes and bars lie along the ray, as its stroke characters do.
+      if (kind === "dashes" || kind === "bars") mark.angleRadians = strokeHeading(cell.glyph);
+      burst.push(mark);
     }
   };
 
@@ -295,7 +322,13 @@ export function renderSyntaxErrorFrame({
       : 0;
     if (density <= 0) return;
     const clear = dilateMask(occupied, cols, rows, settings.backdrop.clearance);
-    const dot = Math.min(cellWidth, cellHeight) * 0.16;
+    const side = Math.min(cellWidth, cellHeight);
+    const particles = settings.backdrop.particles;
+    const grow = particles.size / 100;
+    const pickParticle = createParticlePicker(particles.kind, glyphLayers);
+    // Twinkle and Patches size glyphs too, in steps so few fonts are built.
+    const sizedGlyphs =
+      settings.backdrop.motion === "twinkle" || settings.backdrop.motion === "patches";
     // The field moves; the clearance around the subject stays put.
     const sampleField = createFieldSampler(
       settings.backdrop.motion,
@@ -312,9 +345,12 @@ export function renderSyntaxErrorFrame({
         if (clear[cell] || rays[cell]) continue;
         const pick = sampleField(column, row);
         if (!pick) continue;
-        const mark = glyphLayers
-          ? gridMark(column, row, "glyph", pick.glyph, layerGlyphSize)
-          : gridMark(column, row, "circle", "", dot * pick.scale);
+        const particle = pickParticle(column, row, pick.stage);
+        const glyphScale = sizedGlyphs ? Math.max(0.5, Math.round(pick.scale * 4) / 4) : 1;
+        const mark =
+          particle.mark === "glyph"
+            ? gridMark(column, row, "glyph", pick.glyph, layerGlyphSize * grow * glyphScale)
+            : gridMark(column, row, particle.mark, "", side * particle.size * grow * pick.scale, particle.quarter);
         if (mark) backdrop.push(mark);
       }
     }
@@ -337,9 +373,19 @@ export function renderSyntaxErrorFrame({
     context.fillText(item.glyph.length > 0 ? item.glyph : "*", item.x + dx, item.y + dy);
   };
 
+  // Upright geometric marks draw straight onto the canvas, no transform.
+  const drawFlat = (item: Mark, fill: string, dx: number, dy: number): boolean => {
+    if (item.size <= 0.05) return true;
+    if (fill !== lastFill) {
+      context.fillStyle = fill;
+      lastFill = fill;
+    }
+    return fillMarkAt(context, item.mark, item.x + dx, item.y + dy, item.size, item.available, item.quarter);
+  };
+
   const drawPosed = (item: Mark, fill: string, dx: number, dy: number, boxed: boolean) => {
     const unit = {
-      angleRadians: item.angleRadians,
+      angleRadians: item.angleRadians + (item.quarter * Math.PI) / 2,
       color: fill,
       font: item.font,
       glyph: item.glyph,
@@ -370,6 +416,13 @@ export function renderSyntaxErrorFrame({
         item.squash === 1
       ) {
         drawUpright(item, fill, dx, dy);
+      } else if (
+        item.box === null &&
+        item.angleRadians === 0 &&
+        item.squash === 1 &&
+        drawFlat(item, fill, dx, dy)
+      ) {
+        continue;
       } else {
         // Channel fringes draw boxed marks plain, so only the sheet is boxed.
         drawPosed(item, fill, dx, dy, override === null);
@@ -380,21 +433,26 @@ export function renderSyntaxErrorFrame({
   const paintSwirl = () => {
     const swirlSize = layerGlyphSize * 0.9;
     const swirlFont = glyphFont(swirlSize, glyphs.face, glyphs.bold);
+    const kind = settings.swirl.particle;
+    const mark = kind === "glyphs" ? "glyph" : layerParticleMark(kind);
+    const size = kind === "glyphs" ? swirlSize : swirlSize * layerParticleSize(kind);
+    // Round and square particles look the same at any turn, so they skip it.
+    const turns = kind !== "dots" && kind !== "blocks" && kind !== "rings" && kind !== "boxes";
     for (const particle of collectSwirl(reaction.swirl, frame.width, frame.height, progress)) {
       drawUnit(
         context,
-        "glyph",
+        mark,
         {
-          angleRadians: particle.angle,
+          angleRadians: turns ? particle.angle : 0,
           color: layerInk,
           font: swirlFont,
           glyph: particle.glyph,
-          size: swirlSize,
+          size,
           squash: 1,
           x: particle.x,
           y: particle.y,
         },
-        swirlSize,
+        size,
       );
     }
   };
@@ -412,7 +470,7 @@ export function renderSyntaxErrorFrame({
         const tone = field[index];
         if (tone <= 0) continue;
 
-        const motion = sampleMotion(settings.motion, motionField, progress, column, row);
+        const motion = sampleMotion(reaction.motion, motionField, progress, column, row);
         const magnitude = Math.max(0, Math.min(1.6, floor + tone * motion.scale * response));
         if (magnitude <= 0) continue;
         // Bright cells are boxed in short runs; the share is the knockout.
@@ -482,6 +540,7 @@ export function renderSyntaxErrorFrame({
               : "",
           glyph,
           mark,
+          quarter: 0,
           // A knocked-out mark leaves a frame of box around its cut-out.
           size:
             (knocked && mark !== "glyph" ? Math.min(size, available * 0.7) : size) *
@@ -506,6 +565,8 @@ export function renderSyntaxErrorFrame({
 
   context.save();
   context.translate(frame.x, frame.y);
+  context.save();
+  moveScreen();
   context.textAlign = "center";
   context.textBaseline = "middle";
 
@@ -523,7 +584,9 @@ export function renderSyntaxErrorFrame({
   paintSwirl();
   paintCaption();
   paintSequence();
-  paintCrt();
+  context.restore();
+  paintFiller();
+  paintScreen();
   context.restore();
 }
 

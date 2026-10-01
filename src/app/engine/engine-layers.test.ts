@@ -88,6 +88,7 @@ describe("burst", () => {
     count: 2,
     enabled: true,
     origin: { x: 0, y: 0 },
+    particle: "glyphs",
     rays: 14,
     reach: 90,
     speed: 100,
@@ -158,6 +159,7 @@ describe("swirl", () => {
     center: { x: 0.1, y: -0.2 },
     count: 240,
     enabled: true,
+    particle: "glyphs",
     radius: 42,
     turns: 2,
   };

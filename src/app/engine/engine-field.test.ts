@@ -19,7 +19,7 @@ function snapshot(sample: Sampler): string {
   for (let row = 0; row < ROWS; row += 1) {
     for (let column = 0; column < COLS; column += 1) {
       const pick = sample(column, row);
-      text += pick ? `${pick.glyph}${pick.scale.toFixed(2)}` : " ";
+      text += pick ? `${pick.glyph}${pick.scale.toFixed(2)}${pick.stage}` : " ";
     }
     text += "\n";
   }

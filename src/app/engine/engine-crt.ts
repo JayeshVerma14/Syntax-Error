@@ -1,8 +1,9 @@
 /**
  * A subtle CRT monitor pass over the finished frame: faint scanlines that
  * crawl slowly down the screen, and a soft band of light rolling over it the
- * way a tube's refresh bar does. It draws last, above the sheet, the code roll
- * and every caption, so the whole picture reads as one screen.
+ * way a tube's refresh bar does, with optional film grain boiling over the
+ * whole picture. It draws last, above the sheet, the code roll and every
+ * caption, so the whole picture reads as one screen.
  *
  * Motion is a whole number of cycles per timeline loop, so the loop seam is
  * invisible, and every frame is a pure function of loop progress.
@@ -14,6 +15,7 @@ import { readBoolean, readNumber, type Values } from "./engine-values";
 export const crtTargets = {
   band: "crt.band",
   enabled: "crt.enabled",
+  grain: "crt.grain",
   passes: "crt.passes",
   spacing: "crt.spacing",
   strength: "crt.strength",
@@ -23,6 +25,8 @@ export type CrtSettings = Readonly<{
   /** 0..100: brightness of the rolling band. */
   band: number;
   enabled: boolean;
+  /** 0..100: how strong the film grain is. */
+  grain: number;
   /** Whole band passes per timeline loop. */
   passes: number;
   /** Scanline pitch in frame pixels. */
@@ -39,6 +43,7 @@ export function readCrt(values: Values): CrtSettings {
   return {
     band: Math.min(100, Math.max(0, readNumber(values, crtTargets.band, 35))),
     enabled: readBoolean(values, crtTargets.enabled, false),
+    grain: Math.min(100, Math.max(0, readNumber(values, crtTargets.grain, 0))),
     passes: Math.min(
       MAX_CRT_PASSES,
       Math.max(1, Math.round(readNumber(values, crtTargets.passes, 1))),
@@ -81,11 +86,75 @@ export function crtPhase(progress: number, passes: number): CrtPhase {
   };
 }
 
+/** Grain re-rolls this many times per second, like film. */
+const GRAIN_FPS = 24;
+const GRAIN_TILE = 256;
+let grainTile: OffscreenCanvas | null = null;
+
+function hash(value: number, salt: number): number {
+  let h = Math.imul(value + 97, 2_654_435_761) ^ Math.imul(salt + 13, 1_597_334_677);
+  h = Math.imul(h ^ (h >>> 15), 2_246_822_519);
+  return ((h ^ (h >>> 13)) >>> 0) / 4_294_967_295;
+}
+
+/**
+ * One tile of speckle, built once: light and dark specks with a faint tint,
+ * mostly clear so the picture shows through.
+ */
+function grainSource(): OffscreenCanvas | null {
+  if (grainTile) return grainTile;
+  if (typeof OffscreenCanvas === "undefined") return null;
+  const tile = new OffscreenCanvas(GRAIN_TILE, GRAIN_TILE);
+  const context = tile.getContext("2d");
+  if (!context) return null;
+  const image = context.createImageData(GRAIN_TILE, GRAIN_TILE);
+  const data = image.data;
+  for (let index = 0; index < GRAIN_TILE * GRAIN_TILE; index += 1) {
+    const value = hash(index, 1);
+    const light = value > 0.5;
+    const tint = hash(index, 2);
+    data[index * 4] = light ? 200 + 55 * tint : 20 * tint;
+    data[index * 4 + 1] = light ? 200 + 55 * hash(index, 3) : 10;
+    data[index * 4 + 2] = light ? 255 : 40 + 40 * tint;
+    data[index * 4 + 3] = Math.round(Math.abs(value - 0.5) * 2 * 255);
+  }
+  context.putImageData(image, 0, 0);
+  grainTile = tile;
+  return tile;
+}
+
+/** Film grain over the frame, re-rolled on a steady beat that closes the loop. */
+function drawGrain(
+  context: Paint2D,
+  width: number,
+  height: number,
+  strength: number,
+  progress: number,
+  loopSeconds: number,
+): void {
+  const tile = grainSource();
+  if (!tile || strength <= 0) return;
+  const ticks = Math.max(1, Math.round(loopSeconds * GRAIN_FPS));
+  const tick = Math.floor((((progress % 1) + 1) % 1) * ticks) % ticks;
+  // Specks two pixels wide on a 1080 frame, and as coarse at any export size.
+  const size = GRAIN_TILE * 2 * Math.max(0.5, width / 1080);
+  const offsetX = -hash(tick, 7) * size;
+  const offsetY = -hash(tick, 8) * size;
+  const stamp = (x: number, y: number) => context.drawImage(tile, x, y, size, size);
+  context.imageSmoothingEnabled = false;
+  context.globalAlpha = Math.min(1, (strength / 100) * 0.7);
+  for (let y = offsetY; y < height; y += size) {
+    for (let x = offsetX; x < width; x += size) stamp(x, y);
+  }
+  context.imageSmoothingEnabled = true;
+}
+
 export function drawCrt(
   context: Paint2D,
   frame: Readonly<{ height: number; width: number }>,
   crt: CrtSettings,
   progress: number,
+  loopSeconds = 4,
 ): void {
   if (!crt.enabled) return;
   const { height, width } = frame;
@@ -120,5 +189,6 @@ export function drawCrt(
       context.fillRect(0, top + index * strip, width, strip + 0.5);
     }
   }
+  drawGrain(context, width, height, crt.grain, progress, loopSeconds);
   context.restore();
 }

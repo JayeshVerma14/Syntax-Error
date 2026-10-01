@@ -2,6 +2,7 @@
 
 import type { ToolcraftControlSectionSchema } from "@/toolcraft/runtime";
 
+import { FIELD_PARTICLE_OPTIONS } from "../engine/engine-particles";
 import { whenField, whenFieldMoving } from "./schema-conditions";
 
 export const fieldSection: ToolcraftControlSectionSchema = {
@@ -17,6 +18,32 @@ export const fieldSection: ToolcraftControlSectionSchema = {
       performanceRole: "responsiveness",
       target: "field.enabled",
       type: "switch",
+    },
+    particle: {
+      applicability: whenField,
+      defaultValue: "match",
+      description:
+        "What the field is made of. Match marks follows the unit shape; the rest draw dots, rings, bars, dashes, plus signs, a crosshair lattice framed by corner brackets, boxed squares, solid blocks, or a mix.",
+      label: "Particle",
+      options: FIELD_PARTICLE_OPTIONS,
+      performanceReason: "Particle changes the mark each field cell draws, not how many cells draw.",
+      performanceRole: "responsiveness",
+      target: "field.particle",
+      type: "select",
+    },
+    size: {
+      applicability: whenField,
+      defaultValue: 100,
+      description: "Particle size against its natural size in the cell.",
+      label: "Particle size",
+      max: 250,
+      min: 25,
+      performanceReason: "Size scales the same field marks.",
+      performanceRole: "responsiveness",
+      sliderValueKind: "continuous",
+      target: "field.size",
+      type: "slider",
+      unit: "%",
     },
     density: {
       applicability: whenField,
@@ -54,7 +81,7 @@ export const fieldSection: ToolcraftControlSectionSchema = {
       applicability: whenField,
       defaultValue: "still",
       description:
-        "Shimmer re-picks characters so the field boils; Drift marches it right a cell at a time; Rain drops it in columns; Wave sweeps a band of denser marks through it. The clearance around the subject stays put.",
+        "Shimmer re-picks characters so the field boils; Drift marches it right a cell at a time; Rain drops it in columns; Wave sweeps a band of denser marks through it; Morph flips each cell from dash to dot to boxed square to plus as a front crosses; Twinkle swells cells as a pulse of light crosses the matrix; Patches switches blocks of the field on and off. The clearance around the subject stays put.",
       label: "Motion",
       options: [
         { label: "Still", value: "still" },
@@ -62,6 +89,9 @@ export const fieldSection: ToolcraftControlSectionSchema = {
         { label: "Drift", value: "drift" },
         { label: "Rain", value: "rain" },
         { label: "Wave", value: "wave" },
+        { label: "Morph", value: "morph" },
+        { label: "Twinkle", value: "twinkle" },
+        { label: "Patches", value: "patches" },
       ],
       performanceReason: "Field motion changes which empty cells carry a mark, not how many cells exist.",
       performanceRole: "responsiveness",

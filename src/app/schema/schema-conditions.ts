@@ -101,3 +101,41 @@ export const whenAudio = {
   all: [{ equals: true, target: "audio.enabled" }],
   mode: "conditional",
 } as const;
+
+export const whenBars = {
+  all: [{ equals: true, target: "bars.enabled" }],
+  mode: "conditional",
+} as const;
+
+export const whenLogo = {
+  all: [{ equals: true, target: "logo.enabled" }],
+  mode: "conditional",
+} as const;
+
+/** The ink applies only while the logo is tinted. */
+export const whenLogoTinted = {
+  all: [
+    { equals: true, target: "logo.enabled" },
+    { equals: true, target: "logo.tint" },
+  ],
+  mode: "conditional",
+} as const;
+
+export const whenData = {
+  all: [{ equals: true, target: "data.enabled" }],
+  mode: "conditional",
+} as const;
+
+export const whenTransition = {
+  all: [{ equals: true, target: "transition.enabled" }],
+  mode: "conditional",
+} as const;
+
+/** The beat threshold applies only while fillers fire on beats. */
+export const whenTransitionOnBeats = {
+  all: [
+    { equals: true, target: "transition.enabled" },
+    { equals: "beats", target: "transition.placement" },
+  ],
+  mode: "conditional",
+} as const;

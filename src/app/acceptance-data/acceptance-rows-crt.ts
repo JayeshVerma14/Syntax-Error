@@ -66,6 +66,21 @@ export const crtAcceptance: readonly ToolcraftComponentAcceptance[] = [
   },
   {
     automated: true,
+    automatedTestName: "declares the CRT grain slider",
+    browser: controlBrowser("browser: grain boils over the picture"),
+    componentType: "slider",
+    evidence: "timeline-output",
+    expectedObservable:
+      "Raising Grain lays light and dark specks over the whole picture that re-roll as the loop plays; 0 turns them off.",
+    fixture: crtFixture,
+    id: "crt.grain",
+    kind: "control",
+    target: crtTargets.grain,
+    timelineCoverage: "keyframes",
+    userAction: "Raise Grain and play the loop.",
+  },
+  {
+    automated: true,
     automatedTestName: "declares the CRT passes slider",
     browser: controlBrowser("browser: passes speeds up the rolling band"),
     componentType: "slider",
