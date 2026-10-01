@@ -20,6 +20,7 @@ import { crtSection } from "./schema/schema-sections-crt";
 import { fieldSection } from "./schema/schema-sections-field";
 import { barsSection, logoBuildSection, logoSection } from "./schema/schema-sections-overlays";
 import { dataTextSection, transitionSection } from "./schema/schema-sections-sequence";
+import { wallSection } from "./schema/schema-sections-wall";
 import { guidesSection } from "./schema/schema-sections-guides";
 import {
   backgroundSection,
@@ -75,6 +76,7 @@ export const appSchema = defineToolcraft({
           endTextSection,
           barsSection,
           dataTextSection,
+          wallSection,
           logoSection,
           logoBuildSection,
           transitionSection,

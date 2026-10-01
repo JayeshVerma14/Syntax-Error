@@ -8,6 +8,7 @@ import { dataTextTargets } from "../engine/engine-datatext";
 import { logoTargets } from "../engine/engine-logo";
 import { engineTargets } from "../engine/engine-settings";
 import { transitionTargets } from "../engine/engine-transition";
+import { wallTargets } from "../engine/engine-wall";
 
 export const codeInventory = [
   {
@@ -195,6 +196,55 @@ export const codeInventory = [
       dataTextTargets.rules,
     ],
     title: "Data text",
+  },
+  {
+    entity: "Word wall",
+    entityId: "wall",
+    finiteSelectors: [
+      {
+        affectedTargets: [],
+        reason:
+          "The Show word wall switch decides whether the word wall settings are usable; all fourteen are explicit applicability dependents.",
+        role: "branch",
+        target: wallTargets.enabled,
+      },
+      {
+        reason: "Starts moves the wall in time without changing which other controls apply.",
+        role: "parameter",
+        target: wallTargets.timing,
+      },
+      {
+        reason: "Clear sheet hides the halftone without changing which other controls apply.",
+        role: "parameter",
+        target: wallTargets.cover,
+      },
+      {
+        reason: "Sheet blast fires the burst without changing which other controls apply.",
+        role: "parameter",
+        target: wallTargets.blast,
+      },
+    ],
+    groupingReason:
+      "One entity: the repeated word that fills the screen around a boxed centre copy, its typography and grid spacing, its phase timing and its burst. These reset together.",
+    id: "wall",
+    targets: [
+      wallTargets.enabled,
+      wallTargets.text,
+      wallTargets.type,
+      wallTargets.timing,
+      wallTargets.duration,
+      wallTargets.hero,
+      wallTargets.land,
+      wallTargets.hold,
+      wallTargets.burst,
+      wallTargets.force,
+      wallTargets.spin,
+      wallTargets.colGap,
+      wallTargets.rowGap,
+      wallTargets.cover,
+      wallTargets.blast,
+    ],
+    title: "Word wall",
   },
   {
     entity: "Logo reveal",

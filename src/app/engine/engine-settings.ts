@@ -29,6 +29,7 @@ import { barTargets, readBars, type BarSettings } from "./engine-bars";
 import type { CameraSettings } from "./engine-camera";
 import { readCrt, type CrtSettings } from "./engine-crt";
 import { DATA_TEXT_TYPE, dataTextTargets, readDataText, type DataTextSettings } from "./engine-datatext";
+import { readWall, WALL_TYPE, wallTargets, type WallSettings } from "./engine-wall";
 import { FIELD_MOTIONS, type FieldMotion } from "./engine-field";
 import { readLogo, type LogoSettings } from "./engine-logo";
 import { readTransition, type TransitionSettings } from "./engine-transition";
@@ -328,6 +329,7 @@ export type EngineSettings = Readonly<{
   invert: boolean;
   jitter: number;
   logo: LogoSettings;
+  wall: WallSettings;
   /** 0..100: share of bright cells drawn boxed, in short runs, with the mark cut out. */
   knockout: number;
   layout: GridLayout;
@@ -572,6 +574,7 @@ export function readEngineSettings(values: Values): EngineSettings {
     code: readCodeRoll(values),
     crt: readCrt(values),
     dataText: readDataText(values, readTypeValue(values, dataTextTargets.type, DATA_TEXT_TYPE)),
+    wall: readWall(values, readTypeValue(values, wallTargets.type, WALL_TYPE)),
     colorDiffuse: readBoolean(values, engineTargets.colorDiffuse, false),
     colorMatch: readString(
       values,

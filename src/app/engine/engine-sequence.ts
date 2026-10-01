@@ -24,6 +24,8 @@ import type { LogoArt } from "./engine-logo-art";
 import type { EngineSettings } from "./engine-settings";
 import { drawTransition, transitionCuts } from "./engine-transition";
 import type { Paint2D } from "./engine-units";
+import type { BurstEvent } from "./engine-burst";
+import { drawWall, wallBurstEvent, wallCovers, wallSchedule, type WallSchedule } from "./engine-wall";
 
 export type LogoFrame = Readonly<{ art: LogoArt; crisp: OffscreenCanvas | null }>;
 
@@ -44,14 +46,23 @@ export type SequencePlan = Readonly<{
   takesOver: boolean;
   /** Length of everything on the sequence clock. */
   total: number;
+  wall: WallSchedule | null;
+  /** The Burst explosion the word wall fires at this frame, if any. */
+  wallBurst: BurstEvent | null;
 }>;
+
+/** Where an After word wall starts: once the code roll, end text and logo are done. */
+function wallAfter(codeEnd: number, logo: LogoSchedule | null): number {
+  return Math.max(codeEnd, logo?.end ?? 0);
+}
 
 /** How long the sequence lasts: the code roll, end text, data text and logo. */
 export function sequenceTotal(settings: EngineSettings): number {
   const schedule = codeSchedule(settings.code, settings.endText);
   const logo = logoSchedule(settings.logo, schedule.total);
   const dataAfter = dataTextAfter(settings.dataText, schedule.total, logo);
-  return Math.max(schedule.total, logo?.end ?? 0, dataTextLength(settings.dataText, dataAfter));
+  const wall = wallSchedule(settings.wall, wallAfter(schedule.total, logo));
+  return Math.max(schedule.total, logo?.end ?? 0, dataTextLength(settings.dataText, dataAfter), wall?.end ?? 0);
 }
 
 /** Where the sequence stands at a loop position. */
@@ -69,6 +80,7 @@ export function planSequence(
   // Fillers last real seconds, so a compressed sequence stretches them to match.
   const rate = durationSeconds > 0 && loop > durationSeconds ? loop / durationSeconds : 1;
   const dataAfter = dataTextAfter(settings.dataText, schedule.total, logo);
+  const wall = wallSchedule(settings.wall, wallAfter(schedule.total, logo));
   const data = settings.dataText.enabled ? planDataText(settings.dataText, loop, dataAfter) : null;
   return {
     cuts: transitionCuts(schedule, logo?.start ?? null, {
@@ -83,9 +95,11 @@ export function planSequence(
     loop,
     real: durationSeconds > 0 ? durationSeconds : loop,
     schedule,
-    takesOver: codeTakesOver(settings.code, schedule, time),
+    takesOver: codeTakesOver(settings.code, schedule, time) || wallCovers(settings.wall, wall, time),
     time,
     total,
+    wall,
+    wallBurst: wallBurstEvent(settings.wall, wall, time),
   };
 }
 
@@ -113,6 +127,7 @@ export function paintSequence(
   drawDataText(context, frame, settings.dataText, plan.time, plan.loop, plan.dataAfter, timing.pulse);
   drawBars(context, frame, settings.bars, timing.durationSeconds, timing.progress, timing.pulse.beat);
   drawLogo(context, frame, settings.logo, logo?.art ?? null, logo?.crisp ?? null, plan.logo, plan.time, timing.pulse);
+  drawWall(context, frame, settings.wall, plan.wall, plan.time);
   if (swell !== 1) context.restore();
 }
 

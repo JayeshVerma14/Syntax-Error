@@ -139,3 +139,8 @@ export const whenTransitionOnBeats = {
   ],
   mode: "conditional",
 } as const;
+
+export const whenWall = {
+  all: [{ equals: true, target: "wall.enabled" }],
+  mode: "conditional",
+} as const;
