@@ -21,6 +21,7 @@ import {
 import { awaitSong, sliceSong } from "./engine-audio-io";
 import { barLines } from "./engine-bars";
 import { LOOP_SECONDS } from "./engine-constants";
+import { formTargets, prepareFormGrid, type FormGrid } from "./engine-form";
 import { logoTargets } from "./engine-logo";
 import { prepareLogoFrame } from "./engine-logo-art";
 import { waitForFont } from "./engine-fonts";
@@ -106,6 +107,20 @@ function resolveSongId(state: StateLike, settings: EngineSettings): string | nul
   return findSourceAsset(state.mediaAssets, audioTargets.file)?.id ?? null;
 }
 
+/** The Image form picture sampled for an exported frame, while it is on. */
+function formAt(
+  state: StateLike,
+  settings: EngineSettings,
+  frameWidth: number,
+  frameHeight: number,
+): Promise<FormGrid | undefined> {
+  const id = settings.form.enabled ? findSourceAsset(state.mediaAssets, formTargets.file)?.id : undefined;
+  if (!id) return Promise.resolve(undefined);
+  return awaitStillSource(id).then((image) =>
+    image ? (prepareFormGrid(id, image, settings.form, frameWidth, frameHeight) ?? undefined) : undefined,
+  );
+}
+
 /** The uploaded logo prepared for an exported frame, while the logo is on. */
 function logoAt(
   state: StateLike,
@@ -178,6 +193,7 @@ export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
     const grid = raster ? gridFromRaster(raster, shape.cols, shape.rows) : null;
     const sound = await soundAt(stateLike, settings, timeSeconds);
     const logo = await logoAt(stateLike, settings, frame.width, frame.height);
+    const form = await formAt(stateLike, settings, frame.width, frame.height);
     signal.throwIfAborted();
     // Backdrop, burst, swirl, caption and the code roll still draw without a
     // sampled source; each text layer waits for its chosen face.
@@ -206,6 +222,7 @@ export const syntaxErrorExportRenderer: ToolcraftProductExportRenderer = {
         y: frame.y,
       },
       durationSeconds: readLoopSeconds(state),
+      form,
       grid,
       logo,
       progress: readLoopProgress(state),

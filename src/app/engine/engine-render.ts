@@ -112,11 +112,14 @@ export type RenderFrameInput = Readonly<{
   settings: EngineSettings;
   /** The uploaded logo, prepared as blocks and a crisp copy. */
   logo?: LogoFrame;
+  /** The uploaded Image form picture, sampled onto its glyph grid. */
+  form?: FormGrid;
   /** The music at this frame's song moment, when Audio reactive is on. */
   sound?: AudioFrame;
 }>;
 
 export type { LogoFrame } from "./engine-sequence";
+import type { FormGrid } from "./engine-form";
 
 type Mark = {
   angleRadians: number;
@@ -141,6 +144,7 @@ export function renderSyntaxErrorFrame({
   frame,
   grid,
   progress,
+  form,
   logo,
   settings,
   sound,
@@ -151,7 +155,7 @@ export function renderSyntaxErrorFrame({
   // on screen it takes over the canvas and nothing of the sheet is built.
   const plan = planSequence(settings, progress, durationSeconds);
   // A beat swells the text about the frame centre.
-  const timing = { durationSeconds, progress, pulse: reaction.pulse, swell: reaction.textScale };
+  const timing = { durationSeconds, form, progress, pulse: reaction.pulse, swell: reaction.textScale };
   const paintSequence = () => paintTimedLayers(context, frame, settings, plan, logo, timing);
   // The CRT pass lies over the finished picture, whatever is on screen,
   // and a beat's flash lies under it, over everything the beat moved.

@@ -12,6 +12,7 @@ import { overlayAcceptance } from "./acceptance-data/acceptance-rows-overlays";
 import { samplingAcceptance } from "./acceptance-data/acceptance-rows-sampling";
 import { sequenceAcceptance } from "./acceptance-data/acceptance-rows-sequence";
 import { wallAcceptance } from "./acceptance-data/acceptance-rows-wall";
+import { formAcceptance } from "./acceptance-data/acceptance-rows-form";
 import { viewAcceptance } from "./acceptance-data/acceptance-rows-view";
 
 /**
@@ -71,6 +72,7 @@ export const appAcceptance: readonly ToolcraftComponentAcceptance[] = [
   ...overlayAcceptance,
   ...sequenceAcceptance,
   ...wallAcceptance,
+  ...formAcceptance,
   ...viewAcceptance,
   ...crtAcceptance,
   ...audioAcceptance,

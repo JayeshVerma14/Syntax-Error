@@ -61,6 +61,7 @@ describe("appSchema", () => {
       "bars",
       "data",
       "wall",
+      "form",
       "logo",
       "logo-build",
       "transition",
